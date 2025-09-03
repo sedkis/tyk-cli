@@ -23,7 +23,7 @@ A powerful command-line interface for managing Tyk APIs and configurations. Buil
 
 ```bash
 # Add the Tyk tap
-brew tap tyktech/tyk
+brew tap sedkis/tyk
 
 # Install the CLI
 brew install tyk
@@ -33,7 +33,7 @@ brew install tyk
 
 ```bash
 # Download and install the latest release
-curl -L "https://github.com/tyktech/tyk-cli/releases/latest/download/tyk-cli_$(uname -s)_$(uname -m).tar.gz" | tar xz
+curl -L "https://github.com/sedkis/tyk-cli/releases/latest/download/tyk-cli_$(uname -s)_$(uname -m).tar.gz" | tar xz
 sudo mv tyk /usr/local/bin/
 
 # Verify installation
@@ -43,7 +43,7 @@ tyk --version
 #### From Source
 
 ```bash
-git clone https://github.com/tyktech/tyk-cli.git
+git clone https://github.com/sedkis/tyk-cli.git
 cd tyk-cli
 go build -o tyk .
 sudo mv tyk /usr/local/bin/
@@ -166,7 +166,7 @@ org_id = "prod-org-id"
 
 ```bash
 # Clone the repository
-git clone https://github.com/tyktech/tyk-cli.git
+git clone https://github.com/sedkis/tyk-cli.git
 cd tyk-cli
 
 # Install dependencies

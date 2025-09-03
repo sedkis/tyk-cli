@@ -71,14 +71,14 @@ changelog:
 brews:
   - name: tyk
     tap:
-      owner: tyktech
+      owner: sedkis
       name: homebrew-tyk
       # This will create/update the homebrew-tyk repository
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
-    homepage: "https://github.com/tyktech/tyk-cli"
+    homepage: "https://github.com/sedkis/tyk-cli"
     description: "Command-line interface for managing Tyk APIs and configurations"
     license: "MIT"
     # Dependencies
@@ -94,7 +94,7 @@ brews:
 # GitHub release configuration
 release:
   github:
-    owner: tyktech
+    owner: sedkis
     name: tyk-cli
   draft: false
   prerelease: auto
@@ -107,15 +107,15 @@ release:
     ### Quick Install
     ```bash
     # Homebrew (macOS/Linux)
-    brew tap tyktech/tyk
+    brew tap sedkis/tyk
     brew install tyk
     
     # Direct download
-    curl -L https://github.com/tyktech/tyk-cli/releases/download/{{.Tag}}/tyk-cli_{{.Tag}}_$(uname -s)_$(uname -m).tar.gz | tar xz
+    curl -L https://github.com/sedkis/tyk-cli/releases/download/{{.Tag}}/tyk-cli_{{.Tag}}_$(uname -s)_$(uname -m).tar.gz | tar xz
     sudo mv tyk /usr/local/bin/
     ```
   footer: |
-    **Full Changelog**: https://github.com/tyktech/tyk-cli/compare/{{.PreviousTag}}...{{.Tag}}
+    **Full Changelog**: https://github.com/sedkis/tyk-cli/compare/{{.PreviousTag}}...{{.Tag}}
     
     ---
     
