@@ -101,9 +101,13 @@ func TestInitConfigWithEnvironment(t *testing.T) {
 	// Verify config was loaded from environment
 	config := GetConfigFromContext(apiCmd.Context())
 	require.NotNil(t, config)
-	assert.Equal(t, "http://test-dashboard:3000", config.DashURL)
-	assert.Equal(t, "test-token", config.AuthToken)
-	assert.Equal(t, "test-org", config.OrgID)
+	
+	// Get active environment and verify values
+	activeEnv, err := config.GetActiveEnvironment()
+	require.NoError(t, err)
+	assert.Equal(t, "http://test-dashboard:3000", activeEnv.DashboardURL)
+	assert.Equal(t, "test-token", activeEnv.AuthToken)
+	assert.Equal(t, "test-org", activeEnv.OrgID)
 }
 
 func TestInitConfigWithFlags(t *testing.T) {
@@ -134,9 +138,13 @@ func TestInitConfigWithFlags(t *testing.T) {
 	// Verify config was loaded from flags
 	config := GetConfigFromContext(apiCmd.Context())
 	require.NotNil(t, config)
-	assert.Equal(t, "http://flag-dashboard:3000", config.DashURL)
-	assert.Equal(t, "flag-token", config.AuthToken)
-	assert.Equal(t, "flag-org", config.OrgID)
+	
+	// Get active environment and verify values
+	activeEnv, err := config.GetActiveEnvironment()
+	require.NoError(t, err)
+	assert.Equal(t, "http://flag-dashboard:3000", activeEnv.DashboardURL)
+	assert.Equal(t, "flag-token", activeEnv.AuthToken)
+	assert.Equal(t, "flag-org", activeEnv.OrgID)
 
 	// Verify output format
 	format := GetOutputFormatFromContext(apiCmd.Context())

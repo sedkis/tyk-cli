@@ -213,14 +213,20 @@ func TestClient_CreateOASAPI(t *testing.T) {
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/api/apis/oas", r.URL.Path)
-
-		response := types.OASAPIResponse{
-			APIResponse: types.APIResponse{Status: "success"},
-			API:         mockAPI,
+		if r.Method == http.MethodPost && r.URL.Path == "/api/apis/oas" {
+			// Handle create request - return basic response with ID
+			response := types.APIResponse{Status: "success", ID: "new-api-id"}
+			json.NewEncoder(w).Encode(response)
+		} else if r.Method == http.MethodGet && r.URL.Path == "/api/apis/oas/new-api-id" {
+			// Handle get details request - return full API
+			response := types.OASAPIResponse{
+				APIResponse: types.APIResponse{Status: "success"},
+				API:         mockAPI,
+			}
+			json.NewEncoder(w).Encode(response)
+		} else {
+			http.NotFound(w, r)
 		}
-		json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -229,13 +235,16 @@ func TestClient_CreateOASAPI(t *testing.T) {
 	client, err := NewClient(config)
 	require.NoError(t, err)
 
-	req := &types.CreateOASAPIRequest{
-		OAS:        json.RawMessage(`{"openapi": "3.0.0"}`),
-		SetDefault: true,
+	oasDoc := map[string]interface{}{
+		"openapi": "3.0.0",
+		"info": map[string]interface{}{
+			"title":   "Test API",
+			"version": "1.0.0",
+		},
 	}
 
 	ctx := context.Background()
-	api, err := client.CreateOASAPI(ctx, req)
+	api, err := client.CreateOASAPI(ctx, oasDoc)
 	require.NoError(t, err)
 	assert.Equal(t, mockAPI.ID, api.ID)
 	assert.Equal(t, mockAPI.Name, api.Name)
@@ -281,6 +290,10 @@ func TestClient_Health(t *testing.T) {
 
 // Integration test with live environment
 func TestLiveEnvironmentClient(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	
 	config := createTestConfig("http://tyk-dashboard.localhost:3000", "ff8289874f5d45de945a2ea5c02580fe", "5e9d9544a1dcd60001d0ed20")
 
 	client, err := NewClient(config)

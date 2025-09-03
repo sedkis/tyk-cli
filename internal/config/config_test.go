@@ -270,6 +270,10 @@ func TestManagerEnvironmentOperations(t *testing.T) {
 }
 
 func TestLiveEnvironmentConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+	
 	// This test uses the provided live environment details
 	testEnv := &types.Environment{
 		Name:         "live",

@@ -4,8 +4,9 @@ project_name: tyk-cli
 before:
   hooks:
     - go mod tidy
-    # TODO: Fix test failures and re-enable
-    # - go test ./...
+    # TODO: Re-enable tests after fixing test suite issues
+    # Tests disabled temporarily to get working Homebrew release
+    # - go test ./... -short
 
 builds:
   - id: tyk

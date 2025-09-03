@@ -14,14 +14,20 @@ import (
 
 func TestGenerateTOMLConfig(t *testing.T) {
 	config := &types.Config{
-		DashURL:   "http://localhost:3000",
-		AuthToken: "test-token",
-		OrgID:     "test-org",
+		DefaultEnvironment: "test",
+		Environments: map[string]*types.Environment{
+			"test": {
+				Name:         "test",
+				DashboardURL: "http://localhost:3000",
+				AuthToken:    "test-token",
+				OrgID:        "test-org",
+			},
+		},
 	}
 
-	toml := generateTOMLConfig(config)
+	toml := generateTOMLConfigUnified(config)
 	
-	assert.Contains(t, toml, `dash_url = "http://localhost:3000"`)
+	assert.Contains(t, toml, `dashboard_url = "http://localhost:3000"`)
 	assert.Contains(t, toml, `auth_token = "test-token"`)
 	assert.Contains(t, toml, `org_id = "test-org"`)
 	assert.Contains(t, toml, "# Tyk CLI Configuration")
@@ -60,14 +66,14 @@ func TestGetConfigDir(t *testing.T) {
 
 func TestEnvironmentStruct(t *testing.T) {
 	env := types.Environment{
-		Name:      "test",
-		DashURL:   "http://localhost:3000",
-		AuthToken: "token",
-		OrgID:     "org",
+		Name:         "test",
+		DashboardURL: "http://localhost:3000",
+		AuthToken:    "token",
+		OrgID:        "org",
 	}
 	
 	assert.Equal(t, "test", env.Name)
-	assert.Equal(t, "http://localhost:3000", env.DashURL)
+	assert.Equal(t, "http://localhost:3000", env.DashboardURL)
 	assert.Equal(t, "token", env.AuthToken)
 	assert.Equal(t, "org", env.OrgID)
 }
@@ -81,12 +87,18 @@ func TestConfigFileOperations(t *testing.T) {
 	// Test config file creation and content
 	configFile := filepath.Join(tmpDir, "cli.toml")
 	config := &types.Config{
-		DashURL:   "http://test:3000",
-		AuthToken: "test-token-123",
-		OrgID:     "test-org-456",
+		DefaultEnvironment: "test",
+		Environments: map[string]*types.Environment{
+			"test": {
+				Name:         "test",
+				DashboardURL: "http://test:3000",
+				AuthToken:    "test-token-123",
+				OrgID:        "test-org-456",
+			},
+		},
 	}
 
-	content := generateTOMLConfig(config)
+	content := generateTOMLConfigUnified(config)
 	err = os.WriteFile(configFile, []byte(content), 0600)
 	require.NoError(t, err)
 
@@ -100,7 +112,7 @@ func TestConfigFileOperations(t *testing.T) {
 	require.NoError(t, err)
 	
 	savedStr := string(savedContent)
-	assert.Contains(t, savedStr, "dash_url = \"http://test:3000\"")
+	assert.Contains(t, savedStr, "dashboard_url = \"http://test:3000\"")
 	assert.Contains(t, savedStr, "auth_token = \"test-token-123\"")
 	assert.Contains(t, savedStr, "org_id = \"test-org-456\"")
 }
@@ -157,13 +169,13 @@ default_environment = "development"
 
 [environments.development]
 name = "development"
-dash_url = "http://localhost:3000"
+dashboard_url = "http://localhost:3000"
 auth_token = "old-token"
 org_id = "test-org"
 
 [environments.production]
 name = "production"
-dash_url = "https://prod.example.com"
+dashboard_url = "https://prod.example.com"
 auth_token = "prod-token"
 org_id = "prod-org"`
 
@@ -214,14 +226,14 @@ org_id = "prod-org"`
 	// Development environment should be updated
 	devEnv := cfg.Environments["development"]
 	require.NotNil(t, devEnv)
-	assert.Equal(t, "http://localhost:3000", devEnv.DashURL) // preserved
-	assert.Equal(t, "new-token", devEnv.AuthToken)           // updated
-	assert.Equal(t, "test-org", devEnv.OrgID)                // preserved
+	assert.Equal(t, "http://localhost:3000", devEnv.DashboardURL) // preserved
+	assert.Equal(t, "new-token", devEnv.AuthToken)               // updated
+	assert.Equal(t, "test-org", devEnv.OrgID)                    // preserved
 	
 	// Production environment should be unchanged
 	prodEnv := cfg.Environments["production"]
 	require.NotNil(t, prodEnv)
-	assert.Equal(t, "https://prod.example.com", prodEnv.DashURL)
+	assert.Equal(t, "https://prod.example.com", prodEnv.DashboardURL)
 	assert.Equal(t, "prod-token", prodEnv.AuthToken)
 	assert.Equal(t, "prod-org", prodEnv.OrgID)
 	
@@ -240,9 +252,9 @@ org_id = "prod-org"`
 
 	cfg = manager3.GetConfig()
 	devEnv = cfg.Environments["development"]
-	assert.Equal(t, "http://new-url:4000", devEnv.DashURL)    // updated
-	assert.Equal(t, "new-token", devEnv.AuthToken)            // preserved from previous test
-	assert.Equal(t, "new-org", devEnv.OrgID)                  // updated
+	assert.Equal(t, "http://new-url:4000", devEnv.DashboardURL) // updated
+	assert.Equal(t, "new-token", devEnv.AuthToken)              // preserved from previous test
+	assert.Equal(t, "new-org", devEnv.OrgID)                    // updated
 }
 
 func TestConfigSetWithoutEnvironments(t *testing.T) {
@@ -269,7 +281,7 @@ func TestConfigSetWithoutEnvironments(t *testing.T) {
 
 	// Verify the output indicates success
 	assert.Contains(t, output.String(), "Configuration saved")
-	assert.Contains(t, output.String(), "dash_url = http://localhost:3000")
+	assert.Contains(t, output.String(), "dashboard_url = http://localhost:3000")
 	assert.Contains(t, output.String(), "auth_token = test****oken")
 	assert.Contains(t, output.String(), "org_id = test-org")
 
@@ -279,7 +291,7 @@ func TestConfigSetWithoutEnvironments(t *testing.T) {
 	require.NoError(t, err)
 	
 	contentStr := string(content)
-	assert.Contains(t, contentStr, `dash_url = "http://localhost:3000"`)
+	assert.Contains(t, contentStr, `dashboard_url = "http://localhost:3000"`)
 	assert.Contains(t, contentStr, `auth_token = "test-token"`)
 	assert.Contains(t, contentStr, `org_id = "test-org"`)
 }
