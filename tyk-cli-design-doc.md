@@ -1,589 +1,254 @@
-# Tyk CLI Configuration Management Design Document
+## Tyk CLI – OAS-first design document
 
-## Overview
+### Audience
+- **Developers**: create and manage OAS-native APIs quickly.
+- **Platform engineers**: script simple CI/CD pipelines to provision, update, and cleanup APIs.
 
-This document outlines the design for a comprehensive Tyk CLI tool that enables developers to efficiently manage API configurations without the complexity of handling hundreds of individual command-line flags.
+### Scope (v0)
+- **Supported operations**: get, create, import, update, delete APIs (OAS-native).
+- **OAS-native**: the source of truth is an OpenAPI document (JSON or YAML).
+- **Versioning**: manage OAS API versions (list/create/switch default) in a minimal, opinionated way.
+- **Convert**: import an OAS and convert it to a Tyk API definition artifact for migration or inspection.
+- **Non-goals (v0)**: dry-run, schema validation, linting, templates, mocking, traffic, keys/policies, complex diff/apply flows.
 
-## Problem Statement
+### Design principles
+- **Simple first**: each command does one thing; obvious flags; short help output.
+- **CI-friendly**: deterministic exit codes, `--json` output where relevant, env-driven configuration.
+- **Idempotent updates**: `update` fully replaces the OAS document of a given API/version.
+- **No hidden magic**: `import` behavior is explicit (create vs update is controlled by flags).
 
-The [Tyk OAS API specification](https://tyk.io/docs/api-management/gateway-config-tyk-oas/) contains hundreds of configuration options across multiple sections (server, middleware, authentication, upstream, etc.). Creating individual CLI flags for each option would result in:
+### Terminology
+- "API" refers to a Tyk OAS-native API managed via the Dashboard Admin API.
+- "API definition" refers to the Tyk API Definition document (non-OAS) or the OAS with Tyk extensions.
 
-- **Unmanageable CLI interface** with hundreds of flags
-- **Poor developer experience** with complex command discovery
-- **Maintenance burden** requiring CLI updates for every new configuration option
-- **Inconsistent patterns** across different configuration types
+## CLI overview
 
-## Design Goals
+### Binary name
+`tyk` (primary) with `tyk api ...` subcommands.
 
-1. **Scalability**: Handle hundreds of configuration options without CLI bloat
-2. **Flexibility**: Support any Tyk OAS configuration without code changes
-3. **Developer Experience**: Intuitive, discoverable, and safe operations
-4. **Consistency**: Uniform patterns across all configuration types
-5. **Integration**: Work seamlessly with CI/CD pipelines and automation
+### Authentication & target configuration
+- **Environment variables** (recommended for CI):
+  - `TYK_DASH_URL`: dashboard base URL, e.g. `https://dashboard.example.com`
+  - `TYK_AUTH_TOKEN`: dashboard API auth token
+  - `TYK_ORG_ID`: organization ID (when required by the endpoint)
+- **Flags** (override env): `--dash-url`, `--auth-token`, `--org-id`
 
-## Architecture
+### Output & exit codes
+- Default: human-readable messages.
+- `--json`: machine-friendly JSON for scripting.
+- Exit codes:
+  - `0` success
+  - `1` generic failure (I/O, network, unexpected)
+  - `2` bad arguments (missing file, invalid flag combination)
+  - `3` not found (API or version)
+  - `4` conflict (e.g. creating an API that already exists without `--force`)
 
-### Core Command Structure
+## Commands (v0)
 
-```
-tyk api config <command> <api-id> [options]
-```
-
-### Primary Commands
-
-| Command | Purpose | Example |
-|---------|---------|---------|
-| `set` | Set configuration using JSON path notation | `tyk api config set <id> --set "server.gatewayTags.enabled=true"` |
-| `apply` | Apply configuration from file | `tyk api config apply --file config.yaml --api-id <id>` |
-| `get` | Retrieve current configuration | `tyk api config get <id> --format yaml` |
-| `diff` | Show configuration differences | `tyk api config diff <id> --file config.yaml` |
-| `validate` | Validate configuration | `tyk api config validate --file config.yaml` |
-
-## Configuration Methods
-
-### 1. JSON Path-Based Configuration
-
-**Syntax**: `--set "path.to.config=value"`
-
-```bash
-# Single configuration
-tyk api config set b84fe1a04e5648927971c0557971565c \
-  --set "server.gatewayTags.enabled=true"
-
-# Multiple configurations
-tyk api config set b84fe1a04e5648927971c0557971565c \
-  --set "server.gatewayTags.enabled=true" \
-  --set "server.gatewayTags.tags=[dev2,production]" \
-  --set "server.detailedActivityLogs.enabled=true"
-```
-
-**Supported Value Types**:
-- Booleans: `true`, `false`
-- Strings: `"value"` or `value`
-- Numbers: `123`, `45.67`
-- Arrays: `[item1,item2,item3]`
-- Objects: `{key1:value1,key2:value2}`
-
-### 2. File-Based Configuration
-
-**YAML Configuration**:
-```yaml
-# config.yaml
-server:
-  gatewayTags:
-    enabled: true
-    tags: ["dev2", "production"]
-  detailedActivityLogs:
-    enabled: true
-  detailedTracing:
-    enabled: true
-middleware:
-  global:
-    cache:
-      enabled: true
-      timeout: 300
-upstream:
-  url: "https://api.example.com"
-```
-
-**Usage**:
-```bash
-tyk api config apply --file config.yaml --api-id b84fe1a04e5648927971c0557971565c
-```
-
-### 3. Template-Based Configuration
-
-**Template Definition**:
-```yaml
-# templates/production-api.yaml
-metadata:
-  name: "production-api"
-  description: "Standard production API configuration"
-  version: "1.0"
-variables:
-  - name: "environment"
-    type: "string"
-    required: true
-  - name: "region"
-    type: "string"
-    default: "us-east"
-config:
-  server:
-    gatewayTags:
-      enabled: true
-      tags: ["{{.environment}}", "{{.region}}", "production"]
-    detailedActivityLogs:
-      enabled: true
-  middleware:
-    global:
-      cache:
-        enabled: true
-        timeout: 300
-```
-
-**Usage**:
-```bash
-tyk api config apply-template production-api \
-  --api-id b84fe1a04e5648927971c0557971565c \
-  --vars "environment=prod,region=eu-west"
-```
-
-### 4. Interactive Configuration
+### 1) Get
+Retrieve an API by ID.
 
 ```bash
-tyk api config edit b84fe1a04e5648927971c0557971565c --interactive
+tyk api get --api-id <apiId> [--json]
 ```
 
-**Interactive Flow**:
-```
-? Select configuration section:
-  > Server Configuration
-    Middleware Configuration
-    Authentication Configuration
-    Upstream Configuration
+Behavior:
+- Prints the current OAS document for the default version, unless `--version-name` is specified.
+- Flags:
+  - `--version-name <name>`: get a specific version
 
-? Server Configuration options:
-  > Gateway Tags
-    Listen Path
-    Detailed Logging
-    Circuit Breaker
+Output examples:
+- Human: prints a short summary (name, listenPath, defaultVersion) and saves OAS to stdout.
+- JSON: `{ "apiId": "...", "version": "...", "oas": { ... } }`
 
-? Gateway Tags configuration:
-  Enable gateway tags? (Y/n): Y
-  Enter tags (comma-separated): dev2, production
-  ✓ Configuration updated
-```
-
-## Command Reference
-
-### Core Commands
-
-#### `tyk api config set`
-Set individual configuration values using JSON path notation.
-
-**Syntax**:
-```bash
-tyk api config set <api-id> --set "<path>=<value>" [options]
-```
-
-**Options**:
-- `--set "<path>=<value>"` - Set configuration value (repeatable)
-- `--dry-run` - Preview changes without applying
-- `--backup-to <path>` - Backup current configuration before changes
-- `--validate` - Validate configuration before applying
-- `--output <format>` - Output format (json, yaml, table)
-
-**Examples**:
-```bash
-# Enable gateway tags
-tyk api config set b84fe1a04e5648927971c0557971565c \
-  --set "server.gatewayTags.enabled=true" \
-  --set "server.gatewayTags.tags=[dev2]"
-
-# Complex middleware configuration
-tyk api config set b84fe1a04e5648927971c0557971565c \
-  --set "middleware.global.cache.enabled=true" \
-  --set "middleware.global.cache.timeout=300" \
-  --set "middleware.global.trafficLogs.enabled=true"
-```
-
-#### `tyk api config apply`
-Apply configuration from YAML or JSON files.
-
-**Syntax**:
-```bash
-tyk api config apply --file <config-file> --api-id <api-id> [options]
-```
-
-**Options**:
-- `--file <path>` - Configuration file path (required)
-- `--api-id <id>` - Target API ID (required)
-- `--merge` - Merge with existing configuration (default: replace)
-- `--backup-current` - Backup current configuration
-- `--validate-before-apply` - Validate before applying changes
-
-#### `tyk api config get`
-Retrieve current API configuration.
-
-**Syntax**:
-```bash
-tyk api config get <api-id> [options]
-```
-
-**Options**:
-- `--format <format>` - Output format (json, yaml, table)
-- `--section <section>` - Get specific configuration section
-- `--output-file <path>` - Save to file instead of stdout
-
-**Examples**:
-```bash
-# Get full configuration as YAML
-tyk api config get b84fe1a04e5648927971c0557971565c --format yaml
-
-# Get only server configuration
-tyk api config get b84fe1a04e5648927971c0557971565c --section server
-
-# Save configuration to file
-tyk api config get b84fe1a04e5648927971c0557971565c \
-  --format yaml --output-file current-config.yaml
-```
-
-#### `tyk api config diff`
-Show differences between current configuration and proposed changes.
-
-**Syntax**:
-```bash
-tyk api config diff <api-id> --file <config-file> [options]
-```
-
-**Options**:
-- `--file <path>` - Configuration file to compare
-- `--format <format>` - Diff format (unified, side-by-side, json)
-- `--context <lines>` - Number of context lines in diff
-
-#### `tyk api config validate`
-Validate configuration against Tyk OAS schema.
-
-**Syntax**:
-```bash
-tyk api config validate --file <config-file> [options]
-```
-
-**Options**:
-- `--file <path>` - Configuration file to validate
-- `--schema-version <version>` - Tyk OAS schema version
-- `--strict` - Enable strict validation mode
-
-### Utility Commands
-
-#### `tyk api config list-templates`
-List available configuration templates.
+### 2) Create
+Create a new API from a local OAS file.
 
 ```bash
-tyk api config list-templates [--category <category>]
+tyk api create --file openapi.yaml \
+  [--upstream-url https://service:8080] [--listen-path /my-api/] \
+  [--custom-domain api.example.com] [--set-default]
 ```
 
-#### `tyk api config create-template`
-Create configuration template from existing API.
+Behavior:
+- Creates a new base API with an initial version name derived from the OAS `info.version` unless overridden by `--version-name`.
+- Flags:
+  - `--file <path.{yaml|yml|json}>` (required)
+  - `--version-name <name>`: initial version name; defaults to `info.version` or `v1`.
+  - `--upstream-url`, `--listen-path`, `--custom-domain`: optional overrides applied during creation.
+  - `--set-default`: mark the version as default (on by default if first version).
+
+Result:
+- Returns `apiId` (and version name) on success.
+
+### 3) Import
+Create or update from a local OAS without requiring Tyk extensions.
 
 ```bash
-tyk api config create-template --from-api <api-id> \
-  --name <template-name> \
-  --description <description>
+tyk api import --file openapi.yaml [--create] [--update --api-id <id>] \
+  [--version-name v2] [--set-default]
 ```
 
-#### `tyk api config backup`
-Backup API configuration.
+Behavior:
+- `--create`: create a new API (same as `create`, but accepts plain OAS without Tyk extensions).
+- `--update --api-id`: replace the OAS document of the target API/version.
+- If both `--update` and `--create` are omitted, command fails with exit code 2.
+- Flags:
+  - `--file <path>` (required)
+  - `--api-id <id>` (required with `--update`)
+  - `--version-name <name>`: target or new version; defaults to `info.version`.
+  - `--set-default`: switch default version to `version-name` after operation.
+
+Decision guide:
+- Use `create` when you are provisioning a brand-new API.
+- Use `import --update --api-id` to replace the OAS of an existing API/version.
+- Use `import --create` when you only have a plain OAS and want the CLI to create a new API from it (no Tyk extensions needed).
+
+Common mistakes and messages:
+- Missing mode: running `tyk api import --file ...` without `--create` or `--update` exits with code 2 and message: "Specify one of --create or --update".
+- Both modes: providing both `--create` and `--update` exits with code 2 and message: "Choose either --create or --update, not both".
+- Missing `--api-id` in update mode exits with code 2 and message: "--api-id is required with --update".
+
+### 4) Update
+Replace the OAS of an existing API/version.
 
 ```bash
-tyk api config backup <api-id> --output-dir <backup-directory>
+tyk api update --api-id <id> --file openapi.yaml [--version-name v2] [--set-default]
 ```
 
-#### `tyk api config restore`
-Restore API configuration from backup.
+Behavior:
+- Updates the specified version (or default if not provided) with the given OAS content.
+- Full replace of the stored OAS.
+
+### 5) Delete
+Delete an API by ID.
 
 ```bash
-tyk api config restore <api-id> --from-backup <backup-file>
+tyk api delete --api-id <id> [--yes]
 ```
 
-## Configuration Sections
+Behavior:
+- Prompts for confirmation unless `--yes` is provided.
 
-Based on the [Tyk OAS specification](https://tyk.io/docs/api-management/gateway-config-tyk-oas/), the CLI supports all configuration sections:
-
-### Server Configuration
-- `server.gatewayTags` - Gateway tags for routing
-- `server.listenPath` - API listen path configuration
-- `server.detailedActivityLogs` - Detailed logging settings
-- `server.detailedTracing` - Tracing configuration
-
-### Middleware Configuration
-- `middleware.global` - Global middleware settings
-- `middleware.operations` - Per-operation middleware
-
-### Authentication Configuration
-- `authentication.enabled` - Authentication enablement
-- `authentication.baseIdentityProvider` - Primary auth method
-- `authentication.authConfigs` - Authentication configurations
-
-### Upstream Configuration
-- `upstream.url` - Upstream service URL
-- `upstream.serviceDiscovery` - Service discovery settings
-
-## Safety and Validation
-
-### Pre-Apply Validation
-1. **Schema Validation**: Validate against Tyk OAS schema
-2. **Dependency Checking**: Verify configuration dependencies
-3. **Value Range Validation**: Check numeric ranges and enum values
-4. **Required Field Validation**: Ensure required fields are present
-
-### Backup and Recovery
-```bash
-# Automatic backup before changes
-tyk api config set <api-id> --set "config=value" --backup-to "./backups/"
-
-# Manual backup
-tyk api config backup <api-id> --output-dir "./backups/$(date +%Y%m%d-%H%M%S)"
-
-# Restore from backup
-tyk api config restore <api-id> --from-backup "./backups/20240115-143022/config.yaml"
-```
-
-### Dry Run Mode
-```bash
-# Preview changes without applying
-tyk api config set <api-id> --set "server.gatewayTags.enabled=true" --dry-run
-
-# Output shows:
-# Configuration changes preview:
-# + server.gatewayTags.enabled: true
-# 
-# No changes applied (dry-run mode)
-```
-
-## Integration Patterns
-
-### CI/CD Pipeline Integration
-
-**GitHub Actions Example**:
-```yaml
-name: Deploy API Configuration
-on:
-  push:
-    branches: [main]
-    paths: ['api-configs/**']
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      
-      - name: Install Tyk CLI
-        run: |
-          curl -sSL https://install.tyk.io/cli | sh
-          
-      - name: Validate Configuration
-        run: |
-          tyk api config validate --file api-configs/production.yaml
-          
-      - name: Deploy Configuration
-        run: |
-          tyk api config apply \
-            --file api-configs/production.yaml \
-            --api-id ${{ secrets.API_ID }} \
-            --backup-current \
-            --validate-before-apply
-        env:
-          TYK_DASHBOARD_URL: ${{ secrets.TYK_DASHBOARD_URL }}
-          TYK_DASHBOARD_SECRET: ${{ secrets.TYK_DASHBOARD_SECRET }}
-```
-
-### Environment-Specific Deployments
-
-**Development**:
-```bash
-tyk api config apply-template base-api \
-  --api-id b84fe1a04e5648927971c0557971565c \
-  --vars "environment=development,debug=true" \
-  --set "server.gatewayTags.tags=[dev2,testing]"
-```
-
-**Production**:
-```bash
-tyk api config apply-template base-api \
-  --api-id b84fe1a04e5648927971c0557971565c \
-  --vars "environment=production,debug=false" \
-  --set "server.gatewayTags.tags=[production,eu-west]" \
-  --require-approval
-```
-
-## Error Handling
-
-### Validation Errors
-```bash
-$ tyk api config set <api-id> --set "server.gatewayTags.enabled=invalid"
-
-Error: Invalid configuration value
-  Path: server.gatewayTags.enabled
-  Value: "invalid"
-  Expected: boolean (true/false)
-  
-Suggestion: Use --set "server.gatewayTags.enabled=true"
-```
-
-### Network Errors
-```bash
-$ tyk api config apply --file config.yaml --api-id <api-id>
-
-Error: Failed to connect to Tyk Dashboard
-  URL: http://tyk-dashboard.localhost:3000
-  Status: Connection refused
-  
-Suggestion: Check that Tyk Dashboard is running and accessible
-```
-
-### Configuration Conflicts
-```bash
-$ tyk api config set <api-id> --set "authentication.enabled=false" --set "authentication.authConfigs.oauth.enabled=true"
-
-Warning: Configuration conflict detected
-  authentication.enabled=false but authentication.authConfigs.oauth.enabled=true
-  
-Do you want to continue? (y/N): n
-Operation cancelled
-```
-
-## Configuration Examples
-
-### Basic Gateway Tags Setup
-```bash
-# Your specific use case
-tyk api config set b84fe1a04e5648927971c0557971565c \
-  --set "server.gatewayTags.enabled=true" \
-  --set "server.gatewayTags.tags=[dev2]"
-```
-
-### Production API Configuration
-```yaml
-# production-config.yaml
-server:
-  gatewayTags:
-    enabled: true
-    tags: ["production", "eu-west", "critical"]
-  detailedActivityLogs:
-    enabled: true
-  detailedTracing:
-    enabled: true
-  listenPath:
-    strip: true
-    value: "/api/v2/httpbin/"
-
-middleware:
-  global:
-    cache:
-      enabled: true
-      timeout: 300
-    trafficLogs:
-      enabled: true
-    contextVariables:
-      enabled: true
-
-authentication:
-  enabled: true
-  stripAuthorizationData: true
-  baseIdentityProvider: "authToken"
-  authConfigs:
-    authToken:
-      authHeaderName: "Authorization"
-
-upstream:
-  url: "https://production-httpbin.company.com"
-  serviceDiscovery:
-    enabled: false
-```
+### 6) Versioning
+Minimal helpers for API versions.
 
 ```bash
-tyk api config apply --file production-config.yaml \
-  --api-id b84fe1a04e5648927971c0557971565c \
-  --backup-current \
-  --validate-before-apply
+tyk api versions list --api-id <id> [--json]
+tyk api versions create --api-id <id> --new-version-name v2 [--set-default]
+tyk api versions switch-default --api-id <id> --version-name v2
 ```
 
-### Multi-Environment Template
-```yaml
-# templates/httpbin-api.yaml
-metadata:
-  name: "httpbin-api"
-  description: "HTTPBin API configuration template"
-  version: "1.0"
+Behavior:
+- `list`: prints available versions and indicates the default.
+- `create`: creates a new version linked to the base API. OAS content comes from `--file` if provided, otherwise duplicates from default.
+  - Optional: `--file openapi.yaml`
+- `switch-default`: marks a version as default.
 
-variables:
-  - name: "environment"
-    type: "string"
-    required: true
-    options: ["development", "staging", "production"]
-  - name: "region"
-    type: "string"
-    default: "us-east"
-  - name: "enable_caching"
-    type: "boolean"
-    default: false
-
-config:
-  server:
-    gatewayTags:
-      enabled: true
-      tags: ["{{.environment}}", "{{.region}}", "httpbin"]
-    detailedActivityLogs:
-      enabled: "{{if eq .environment \"production\"}}true{{else}}false{{end}}"
-    detailedTracing:
-      enabled: true
-
-  middleware:
-    global:
-      cache:
-        enabled: "{{.enable_caching}}"
-        timeout: "{{if .enable_caching}}300{{else}}0{{end}}"
-      trafficLogs:
-        enabled: true
-
-  upstream:
-    url: "{{if eq .environment \"production\"}}https://prod-httpbin.company.com{{else}}http://dev-httpbin.localhost{{end}}"
-```
+### 7) Convert
+Convert a local OAS to a Tyk API definition artifact (no network call).
 
 ```bash
-# Development deployment
-tyk api config apply-template httpbin-api \
-  --api-id b84fe1a04e5648927971c0557971565c \
-  --vars "environment=development,region=us-east,enable_caching=false"
-
-# Production deployment
-tyk api config apply-template httpbin-api \
-  --api-id b84fe1a04e5648927971c0557971565c \
-  --vars "environment=production,region=eu-west,enable_caching=true"
+tyk api convert --file openapi.yaml --out api-definition.json [--format apidef|oas-with-tyk]
 ```
 
-## Implementation Considerations
+Behavior:
+- `--format apidef` (default): produce classic Tyk API Definition JSON.
+- `--format oas-with-tyk`: emit OAS with `x-tyk-api-gateway` extensions populated.
 
-### Technical Requirements
-1. **JSON Path Library**: Use robust JSON path implementation (e.g., JSONPath, JMESPath)
-2. **Schema Validation**: Integrate with Tyk OAS JSON Schema
-3. **Template Engine**: Support Go templates or similar for variable substitution
-4. **Configuration Merging**: Deep merge capabilities for partial updates
-5. **Backup Management**: Versioned backup system with metadata
+## Example flows
 
-### Performance Considerations
-1. **Lazy Loading**: Load configuration schemas on demand
-2. **Caching**: Cache API configurations for repeated operations
-3. **Parallel Operations**: Support bulk operations across multiple APIs
-4. **Streaming**: Stream large configuration files instead of loading entirely in memory
+### Developer: create and iterate locally
+```bash
+export TYK_DASH_URL=https://dashboard.example.com
+export TYK_AUTH_TOKEN=***
+export TYK_ORG_ID=***
 
-### Security Considerations
-1. **Credential Management**: Secure handling of API keys and secrets
-2. **Audit Logging**: Log all configuration changes with user attribution
-3. **Access Control**: Integration with Tyk RBAC system
-4. **Encryption**: Encrypt sensitive configuration values in transit and at rest
+tyk api create --file ./openapi.yaml --listen-path /orders/ --set-default --json > create.json
+API_ID=$(jq -r .apiId create.json)
 
-## Future Enhancements
+# Make changes to openapi.yaml...
+tyk api update --api-id "$API_ID" --file ./openapi.yaml
+tyk api get --api-id "$API_ID" --json | jq .oas.info.version
+```
 
-### Phase 2 Features
-1. **Configuration Drift Detection**: Compare deployed vs. desired configuration
-2. **Multi-API Operations**: Apply configurations across multiple APIs
-3. **Configuration Versioning**: Track and manage configuration versions
-4. **Rollback Capabilities**: Easy rollback to previous configurations
-5. **Configuration Validation Rules**: Custom validation rules for organization policies
+### Platform engineer: CI pipeline (import-and-update)
+```bash
+# assumes env vars are set in CI
+tyk api import --update --api-id "$API_ID" --file ./openapi.yaml --version-name v2 --set-default --json
+```
 
-### Phase 3 Features
-1. **GitOps Integration**: Native Git repository integration
-2. **Policy as Code**: Define and enforce configuration policies
-3. **Automated Migration**: Migrate configurations between environments
-4. **Configuration Analytics**: Insights and recommendations for configurations
-5. **Integration with Tyk Operator**: Seamless Kubernetes integration
+## Implementation notes
 
-## Conclusion
+### HTTP API surface (Tyk Dashboard Admin API)
+- Create OAS API: POST `/api/apis/oas` (body: OAS JSON/YAML)
+- Update OAS API: PUT `/api/apis/oas/{apiId}` (body: OAS JSON/YAML)
+- Get OAS API details: GET `/api/apis/oas/{apiId}`
+- Delete OAS API: DELETE `/api/apis/oas/{apiId}`
+- List OAS versions: GET `/api/apis/oas/{apiId}/versions`
+- Create version: POST `/api/apis/oas` with `base_api_id` and `new_version_name` or a version endpoint if available
+- Switch default version: PATCH `/api/apis/oas/{apiId}` with `set_default`
 
-This design provides a scalable, flexible, and developer-friendly approach to managing Tyk API configurations. By avoiding the hundreds of individual CLI flags problem and instead using JSON path notation, file-based configurations, and templates, developers can efficiently manage complex API configurations while maintaining safety, validation, and integration capabilities.
+Notes:
+- The CLI should accept both YAML and JSON and convert to the correct content type automatically.
+- Where the API requires wrapper fields (e.g., `base_api_id`, `new_version_name`), the CLI will construct the payload from flags.
 
-The design supports all current Tyk OAS configuration options and provides a foundation for future enhancements without requiring CLI interface changes.
+### File handling
+- Accept `.yaml`, `.yml`, `.json`.
+- Preserve order and comments when possible on read/write (YAML-in, YAML-out not guaranteed; we primarily send JSON over the wire and read YAML locally).
+
+### Security
+- Never print tokens in logs or errors.
+- Support `~/.config/tyk/cli.toml` for defaults (optional in v0), overridden by env, then flags.
+
+### Telemetry (optional, off by default)
+- A `--anonymous-usage` flag may be added later; out of scope for v0.
+
+## UX details
+
+### Consistent flags
+- `--file`, `--api-id`, `--version-name`, `--set-default`, `--json`, `--yes`.
+
+### Minimal helpful output
+- On create/import/update: print `apiId`, `versionName`, and listen path summary.
+- On delete: print `Deleted API <id>`.
+
+### Errors
+- Network timeouts: show brief message with retry hint; non-zero exit. Example: "Request timed out contacting dashboard; check TYK_DASH_URL or try again".
+- 4xx/5xx responses: display concise cause and any server-provided detail. On `--json`, return `{ "error": { "status": <int>, "code": "<string|optional>", "message": "...", "details": { ... } } }`.
+- Not found (3): "API <id> not found".
+- Conflict (4): when creating an API and server reports a duplicate or conflicting resource, e.g., listen path in use; message includes conflicting field if provided.
+- Bad arguments (2): descriptive client-side messages (missing file, both modes set, etc.).
+
+Examples (human output):
+- Create conflict: "Cannot create API: listen path /orders/ is already in use (status 409)".
+- Update not found: "API abcd123 not found (status 404)".
+
+On `--json`, errors are machine-parseable and include `status`, `message`, and optional `details` map.
+
+### Input validation (v0)
+- Minimal client-side validation only:
+  - Ensure `--file` exists and is readable.
+  - Parse YAML/JSON; surface parser errors with line/column when available.
+  - Check required flag combinations (e.g., `--api-id` with `--update`).
+- No semantic OAS validation in v0 (no lint/dry-run); server-side validation errors are passed through with helpful context.
+
+## Open questions (can be deferred)
+- Should `import` auto-create when `--api-id` is not provided? For v0, keep explicit: require `--create` or `--update`.
+- Should we support selecting an API by name? Defer to v1; v0 uses `--api-id`.
+- How much of `x-tyk-*` should `convert` populate? v0: minimal sane defaults; advanced mapping later.
+
+## Future work (post v0)
+- Validation and linting (`tyk api validate`).
+- Diff and apply strategies (`tyk api apply --diff`).
+- Policies, keys, mocking, test data seeds.
+- Templates/quickstarts for common upstreams.
+
+## Acceptance checklist (v0)
+- Get/create/import/update/delete commands implemented with described flags.
+- Versioning list/create/switch-default operational.
+- Convert produces usable `apidef` and `oas-with-tyk` artifacts.
+- Works with env-only configuration in CI.
+- `--json` outputs stable fields for scripting.
+
 
