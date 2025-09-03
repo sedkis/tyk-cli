@@ -60,12 +60,14 @@ tyk api apply --file api.yaml      # Upsert API (create/update based on ID)
 tyk api apply --file new-api.yaml --create  # Create new API via apply
 
 # Explicit CRUD operations
-tyk api get --api-id <id>           # Get API details
+tyk api get <api-id>                # Get API details
+tyk api get <api-id> --version-name v2  # Get specific version
 tyk api create --file api.yaml     # Always create new API
 tyk api update --api-id <id> --file updated.yaml  # Always update existing
-tyk api delete --api-id <id>        # Delete API
+tyk api delete <api-id>             # Delete API (with confirmation)
+tyk api delete <api-id> --yes       # Delete without confirmation
 
-# Utilities
+# Utilities (Phase 3)
 tyk api convert --file api.yaml --format apidef  # Convert OAS to Tyk format
 ```
 
@@ -173,28 +175,30 @@ tyk-cli/
 
 ## 🗺️ Roadmap
 
-### ✅ Phase 1: Foundation (Completed)
+### 🏗️ Foundation
 - Multi-environment configuration system
 - HTTP client with Tyk Dashboard integration
 - Interactive CLI framework with colors
 - Comprehensive test suite (>80% coverage)
 
-### 🚧 Phase 2: Core API Commands (In Progress)
-- `tyk api get` - Retrieve API details
-- `tyk api create` - Create APIs from OAS files
-- `tyk api import` - Import APIs with create/update modes
-- `tyk api update` - Update existing APIs
-- `tyk api delete` - Delete APIs
+### 🎯 Core API Management
+- `tyk api get` - Retrieve API details with optional version selection
+- `tyk api create` - Create new APIs from OAS files (explicit creation)
+- `tyk api apply` - Declarative upsert based on API ID presence
+- `tyk api update` - Update existing APIs explicitly
+- `tyk api delete` - Delete APIs with confirmation prompts
+- Full JSON output support with `--json` flag
+- Proper exit code system (0=success, 2=bad args, 3=not found, 4=conflict)
 
-### 📅 Phase 3: Versioning
-- `tyk api versions list` - List API versions
-- `tyk api versions create` - Create new versions
-- `tyk api versions switch-default` - Switch default versions
+### 🔧 Enhanced Features
+- `tyk api convert` - Convert between OAS and Tyk API definition formats
+- Enhanced error handling and user experience improvements
+- Advanced JSON output formatting
 
-### 🔮 Phase 4: Advanced Features
-- `tyk api convert` - Convert between formats
-- JSON output support with `--json` flag
-- Comprehensive error handling and exit codes
+### 🚀 Future Enhancements
+- API versioning commands (`versions list/create/switch-default`)
+- API validation and linting
+- GitOps diff functionality
 
 ## 🤝 Contributing
 
