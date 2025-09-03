@@ -86,8 +86,11 @@ func initConfig(cmd *cobra.Command, flags *GlobalFlags) error {
 		return err
 	}
 
+	// Get effective config for API operations (resolves environment values)
+	effectiveConfig := configManager.GetEffectiveConfig()
+
 	// Store in command context
-	cmd.SetContext(withConfig(cmd.Context(), config))
+	cmd.SetContext(withConfig(cmd.Context(), effectiveConfig))
 	cmd.SetContext(withOutputFormat(cmd.Context(), getOutputFormat(flags.JSON)))
 	
 	return nil

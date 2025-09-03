@@ -36,10 +36,8 @@ func NewManager() *Manager {
 	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	// Set default values
-	v.SetDefault("dash_url", "")
-	v.SetDefault("auth_token", "")
-	v.SetDefault("org_id", "")
+	// Set default values for unified environment system
+	v.SetDefault("default_environment", "")
 
 	return &Manager{
 		viper: v,
@@ -77,19 +75,38 @@ func (m *Manager) GetConfig() *types.Config {
 	return m.config
 }
 
-// SetFromFlags updates configuration with values from command line flags
+// GetEffectiveConfig returns a config with values resolved from the active environment
+func (m *Manager) GetEffectiveConfig() *types.Config {
+	// In unified approach, just return the config as-is
+	// The active environment is accessed via GetActiveEnvironment()
+	return m.config
+}
+
+// SetFromFlags updates the current environment with values from command line flags
 func (m *Manager) SetFromFlags(dashURL, authToken, orgID string) {
+	// Get or create a temporary environment for flag overrides
+	activeEnv, err := m.config.GetActiveEnvironment()
+	if err != nil {
+		// If no environments exist, create a temporary one for compatibility
+		activeEnv = &types.Environment{
+			Name: "temp",
+		}
+	}
+	
+	// Apply flag overrides to active environment
 	if dashURL != "" {
-		m.config.DashURL = dashURL
-		m.viper.Set("dash_url", dashURL)
+		activeEnv.DashboardURL = dashURL
 	}
 	if authToken != "" {
-		m.config.AuthToken = authToken
-		m.viper.Set("auth_token", authToken)
+		activeEnv.AuthToken = authToken
 	}
 	if orgID != "" {
-		m.config.OrgID = orgID
-		m.viper.Set("org_id", orgID)
+		activeEnv.OrgID = orgID
+	}
+	
+	// If we had to create a temp environment, save it
+	if activeEnv.Name == "temp" {
+		m.SaveEnvironment(activeEnv, true)
 	}
 }
 
@@ -101,7 +118,7 @@ func (m *Manager) SaveEnvironment(env *types.Environment, setAsDefault bool) err
 	
 	m.config.Environments[env.Name] = env
 	
-	if setAsDefault {
+	if setAsDefault || m.config.DefaultEnvironment == "" {
 		m.config.DefaultEnvironment = env.Name
 	}
 	

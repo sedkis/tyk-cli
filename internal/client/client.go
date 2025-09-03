@@ -45,7 +45,13 @@ func NewClient(config *types.Config) (*Client, error) {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
-	baseURL, err := url.Parse(config.DashURL)
+	// Get the active environment
+	activeEnv, err := config.GetActiveEnvironment()
+	if err != nil {
+		return nil, fmt.Errorf("no active environment: %w", err)
+	}
+
+	baseURL, err := url.Parse(activeEnv.DashboardURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid dashboard URL: %w", err)
 	}
@@ -96,8 +102,14 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	// Get active environment for auth token
+	activeEnv, err := c.config.GetActiveEnvironment()
+	if err != nil {
+		return nil, fmt.Errorf("no active environment for auth: %w", err)
+	}
+
 	// Set headers
-	req.Header.Set(HeaderAuthorization, c.config.AuthToken)
+	req.Header.Set(HeaderAuthorization, activeEnv.AuthToken)
 	req.Header.Set(HeaderAccept, ContentTypeJSON)
 	if contentType != "" {
 		req.Header.Set(HeaderContentType, contentType)
@@ -114,6 +126,7 @@ func (c *Client) handleResponse(resp *http.Response, result interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
+
 
 	// Handle error status codes
 	if resp.StatusCode >= 400 {
@@ -156,12 +169,40 @@ func (c *Client) GetOASAPI(ctx context.Context, apiID string, versionName string
 		return nil, err
 	}
 
-	var result types.OASAPIResponse
-	if err := c.handleResponse(resp, &result); err != nil {
-		return nil, err
+	// Read the response body directly since it's a raw OAS document
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	return result.API, nil
+	// Handle error status codes
+	if resp.StatusCode >= 400 {
+		var errorResp types.ErrorResponse
+		errorResp.Status = resp.StatusCode
+		errorResp.Message = string(body)
+		
+		// Try to parse as JSON error response
+		if err := json.Unmarshal(body, &errorResp); err != nil {
+			errorResp.Message = fmt.Sprintf("%s: %s", resp.Status, string(body))
+		}
+		
+		return nil, &errorResp
+	}
+
+	// Parse the OAS document
+	var oasDoc map[string]interface{}
+	if err := json.Unmarshal(body, &oasDoc); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal OAS document: %w", err)
+	}
+
+	// Extract API metadata from x-tyk-api-gateway extension
+	api, err := c.parseOASDocumentToAPI(oasDoc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse API metadata: %w", err)
+	}
+
+	return api, nil
 }
 
 // CreateOASAPI creates a new OAS API
@@ -254,4 +295,72 @@ func (c *Client) Health(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// parseOASDocumentToAPI extracts API metadata from an OAS document with Tyk extensions
+func (c *Client) parseOASDocumentToAPI(oasDoc map[string]interface{}) (*types.OASAPI, error) {
+	// Extract basic OAS info
+	info, ok := oasDoc["info"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid OAS document: missing info section")
+	}
+
+	// Extract x-tyk-api-gateway extension
+	tykExt, ok := oasDoc["x-tyk-api-gateway"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid Tyk OAS document: missing x-tyk-api-gateway extension")
+	}
+
+	// Extract API info from Tyk extension
+	apiInfo, ok := tykExt["info"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid Tyk OAS document: missing info in x-tyk-api-gateway")
+	}
+
+	// Extract server info to get listen path
+	var listenPath string
+	if server, ok := tykExt["server"].(map[string]interface{}); ok {
+		if listenPathInfo, ok := server["listenPath"].(map[string]interface{}); ok {
+			if path, ok := listenPathInfo["value"].(string); ok {
+				listenPath = path
+			}
+		}
+	}
+
+	// Extract upstream URL
+	var upstreamURL string
+	if upstream, ok := tykExt["upstream"].(map[string]interface{}); ok {
+		if url, ok := upstream["url"].(string); ok {
+			upstreamURL = url
+		}
+	}
+
+	// Build the API object
+	api := &types.OASAPI{
+		ID:             getString(apiInfo, "id"),
+		Name:           getString(apiInfo, "name"),
+		ListenPath:     listenPath,
+		UpstreamURL:    upstreamURL,
+		OAS:            oasDoc,
+		// For now, we'll set these to empty since they might not be in this format
+		DefaultVersion: "v1",
+		VersionData:    make(map[string]*types.APIVersion),
+		CreatedAt:      "", 
+		UpdatedAt:      "",
+	}
+
+	// Extract title from OAS info if name is empty
+	if api.Name == "" {
+		api.Name = getString(info, "title")
+	}
+
+	return api, nil
+}
+
+// getString safely extracts a string value from a map
+func getString(m map[string]interface{}, key string) string {
+	if val, ok := m[key].(string); ok {
+		return val
+	}
+	return ""
 }

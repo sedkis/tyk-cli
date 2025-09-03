@@ -13,6 +13,21 @@ import (
 	"github.com/tyktech/tyk-cli/pkg/types"
 )
 
+// Helper function to create a valid config with environment
+func createTestConfig(dashboardURL, authToken, orgID string) *types.Config {
+	return &types.Config{
+		DefaultEnvironment: "test",
+		Environments: map[string]*types.Environment{
+			"test": {
+				Name:         "test",
+				DashboardURL: dashboardURL,
+				AuthToken:    authToken,
+				OrgID:        orgID,
+			},
+		},
+	}
+}
+
 func TestNewClient(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -20,29 +35,21 @@ func TestNewClient(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name: "valid config",
-			config: &types.Config{
-				DashURL:   "http://localhost:3000",
-				AuthToken: "test-token",
-				OrgID:     "test-org",
-			},
+			name:        "valid config",
+			config:      createTestConfig("http://localhost:3000", "test-token", "test-org"),
 			expectError: false,
 		},
 		{
-			name: "invalid config - missing URL",
+			name: "invalid config - no environments",
 			config: &types.Config{
-				AuthToken: "test-token",
-				OrgID:     "test-org",
+				DefaultEnvironment: "",
+				Environments:       make(map[string]*types.Environment),
 			},
 			expectError: true,
 		},
 		{
-			name: "invalid URL format",
-			config: &types.Config{
-				DashURL:   "invalid-url",
-				AuthToken: "test-token",
-				OrgID:     "test-org",
-			},
+			name:        "invalid URL format",
+			config:      createTestConfig("invalid-url", "test-token", "test-org"),
 			expectError: true,
 		},
 	}
@@ -63,11 +70,7 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestClient_SetTimeout(t *testing.T) {
-	config := &types.Config{
-		DashURL:   "http://localhost:3000",
-		AuthToken: "test-token",
-		OrgID:     "test-org",
-	}
+	config := createTestConfig("http://localhost:3000", "test-token", "test-org")
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
@@ -94,11 +97,7 @@ func TestClient_doRequest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config := &types.Config{
-		DashURL:   server.URL,
-		AuthToken: "test-token",
-		OrgID:     "test-org",
-	}
+	config := createTestConfig(server.URL, "test-token", "test-org")
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
@@ -112,11 +111,7 @@ func TestClient_doRequest(t *testing.T) {
 }
 
 func TestClient_handleResponse(t *testing.T) {
-	config := &types.Config{
-		DashURL:   "http://localhost:3000",
-		AuthToken: "test-token",
-		OrgID:     "test-org",
-	}
+	config := createTestConfig("http://localhost:3000", "test-token", "test-org")
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
@@ -163,30 +158,40 @@ func TestClient_handleResponse(t *testing.T) {
 }
 
 func TestClient_GetOASAPI(t *testing.T) {
-	mockAPI := &types.OASAPI{
-		ID:         "test-api-id",
-		Name:       "Test API",
-		ListenPath: "/test",
-		OAS:        map[string]interface{}{"openapi": "3.0.0"},
+	// Create a mock OAS document with x-tyk-api-gateway extension
+	mockOASDoc := map[string]interface{}{
+		"openapi": "3.0.0",
+		"info": map[string]interface{}{
+			"title":   "Test API",
+			"version": "1.0.0",
+		},
+		"x-tyk-api-gateway": map[string]interface{}{
+			"info": map[string]interface{}{
+				"id":   "test-api-id",
+				"name": "Test API",
+			},
+			"server": map[string]interface{}{
+				"listenPath": map[string]interface{}{
+					"value": "/test",
+				},
+			},
+			"upstream": map[string]interface{}{
+				"url": "http://example.com",
+			},
+		},
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Contains(t, r.URL.Path, "/api/apis/oas/test-api-id")
 
-		response := types.OASAPIResponse{
-			APIResponse: types.APIResponse{Status: "success"},
-			API:         mockAPI,
-		}
-		json.NewEncoder(w).Encode(response)
+		// Return raw OAS document (as the Tyk Dashboard does)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockOASDoc)
 	}))
 	defer server.Close()
 
-	config := &types.Config{
-		DashURL:   server.URL,
-		AuthToken: "test-token",
-		OrgID:     "test-org",
-	}
+	config := createTestConfig(server.URL, "test-token", "test-org")
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
@@ -194,8 +199,10 @@ func TestClient_GetOASAPI(t *testing.T) {
 	ctx := context.Background()
 	api, err := client.GetOASAPI(ctx, "test-api-id", "")
 	require.NoError(t, err)
-	assert.Equal(t, mockAPI.ID, api.ID)
-	assert.Equal(t, mockAPI.Name, api.Name)
+	assert.Equal(t, "test-api-id", api.ID)
+	assert.Equal(t, "Test API", api.Name)
+	assert.Equal(t, "/test", api.ListenPath)
+	assert.Equal(t, "http://example.com", api.UpstreamURL)
 }
 
 func TestClient_CreateOASAPI(t *testing.T) {
@@ -217,11 +224,7 @@ func TestClient_CreateOASAPI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	config := &types.Config{
-		DashURL:   server.URL,
-		AuthToken: "test-token",
-		OrgID:     "test-org",
-	}
+	config := createTestConfig(server.URL, "test-token", "test-org")
 
 	client, err := NewClient(config)
 	require.NoError(t, err)
@@ -247,11 +250,7 @@ func TestClient_Health(t *testing.T) {
 		}))
 		defer server.Close()
 
-		config := &types.Config{
-			DashURL:   server.URL,
-			AuthToken: "test-token",
-			OrgID:     "test-org",
-		}
+		config := createTestConfig(server.URL, "test-token", "test-org")
 
 		client, err := NewClient(config)
 		require.NoError(t, err)
@@ -268,11 +267,7 @@ func TestClient_Health(t *testing.T) {
 		}))
 		defer server.Close()
 
-		config := &types.Config{
-			DashURL:   server.URL,
-			AuthToken: "test-token",
-			OrgID:     "test-org",
-		}
+		config := createTestConfig(server.URL, "test-token", "test-org")
 
 		client, err := NewClient(config)
 		require.NoError(t, err)
@@ -286,11 +281,7 @@ func TestClient_Health(t *testing.T) {
 
 // Integration test with live environment
 func TestLiveEnvironmentClient(t *testing.T) {
-	config := &types.Config{
-		DashURL:   "http://tyk-dashboard.localhost:3000",
-		AuthToken: "ff8289874f5d45de945a2ea5c02580fe",
-		OrgID:     "5e9d9544a1dcd60001d0ed20",
-	}
+	config := createTestConfig("http://tyk-dashboard.localhost:3000", "ff8289874f5d45de945a2ea5c02580fe", "5e9d9544a1dcd60001d0ed20")
 
 	client, err := NewClient(config)
 	require.NoError(t, err)

@@ -4,151 +4,332 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
+	"github.com/AlecAivazis/survey/v2"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/tyktech/tyk-cli/internal/config"
 	"github.com/tyktech/tyk-cli/pkg/types"
 )
 
-// NewConfigCommand creates the 'tyk config' command for managing global configuration
+// NewConfigCommand creates the 'tyk config' command for unified environment management
 func NewConfigCommand() *cobra.Command {
 	configCmd := &cobra.Command{
 		Use:   "config",
-		Short: "Manage global CLI configuration",
-		Long:  "Commands for setting up and managing global CLI configuration",
+		Short: "Manage configuration environments",
+		Long: `Unified environment and configuration management.
+
+In the unified approach, environments ARE the configuration system. 
+Each environment contains dashboard URL, auth token, and org ID.
+
+Examples:
+  tyk config list                    # List all environments
+  tyk config use staging             # Switch to staging environment  
+  tyk config current                 # Show current environment
+  tyk config add dev --dashboard-url http://localhost:3000 --auth-token token --org-id org
+  tyk config set dashboard-url https://api.tyk.io  # Update current environment`,
 	}
 
+	configCmd.AddCommand(NewConfigListCommand())
+	configCmd.AddCommand(NewConfigUseCommand())
+	configCmd.AddCommand(NewConfigCurrentCommand())
+	configCmd.AddCommand(NewConfigAddCommand())
 	configCmd.AddCommand(NewConfigSetCommand())
-	configCmd.AddCommand(NewConfigGetCommand())
-	configCmd.AddCommand(NewConfigUnsetCommand())
-	configCmd.AddCommand(NewConfigEnvCommand())
+	configCmd.AddCommand(NewConfigRemoveCommand())
 
 	return configCmd
+}
+
+// NewConfigListCommand creates the 'tyk config list' command
+func NewConfigListCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all configured environments",
+		Long:  "Display all configured environments and show which one is active",
+		RunE:  runConfigList,
+	}
+
+	return cmd
+}
+
+// NewConfigUseCommand creates the 'tyk config use' command  
+func NewConfigUseCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "use [environment-name]",
+		Short: "Switch to a different environment",
+		Long:  "Change the active environment. If no environment name is provided, you'll be prompted to select from available environments.",
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  runConfigUse,
+	}
+
+	return cmd
+}
+
+// NewConfigCurrentCommand creates the 'tyk config current' command
+func NewConfigCurrentCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "current",
+		Short: "Show current active environment",
+		Long:  "Display the currently active environment and its configuration",
+		RunE:  runConfigCurrent,
+	}
+
+	return cmd
+}
+
+// NewConfigAddCommand creates the 'tyk config add' command
+func NewConfigAddCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "add <environment-name>",
+		Short: "Add a new environment",
+		Long: `Add a new environment configuration.
+
+Examples:
+  tyk config add development --dashboard-url http://localhost:3000 --auth-token token --org-id org
+  tyk config add production --dashboard-url https://prod-dashboard.com --auth-token prod-token --org-id prod-org --set-default`,
+		Args: cobra.ExactArgs(1),
+		RunE: runConfigAdd,
+	}
+
+	cmd.Flags().String("dashboard-url", "", "Tyk Dashboard URL")
+	cmd.Flags().String("auth-token", "", "Dashboard API auth token")
+	cmd.Flags().String("org-id", "", "Organization ID")
+	cmd.Flags().Bool("set-default", false, "Set this environment as the default")
+
+	cmd.MarkFlagRequired("dashboard-url")
+	cmd.MarkFlagRequired("auth-token")
+	cmd.MarkFlagRequired("org-id")
+
+	return cmd
 }
 
 // NewConfigSetCommand creates the 'tyk config set' command
 func NewConfigSetCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set",
-		Short: "Set global configuration values",
-		Long: `Set global configuration values that will be used by all CLI commands.
-Configuration is stored in ~/.config/tyk/cli.toml
+		Short: "Update current environment configuration",
+		Long: `Update configuration values for the current active environment.
 
 Examples:
-  tyk config set --dash-url http://localhost:3000
-  tyk config set --auth-token your-api-token
-  tyk config set --org-id your-org-id
+  tyk config set dashboard-url https://new-dashboard.com
+  tyk config set auth-token new-token
+  tyk config set org-id new-org-id
   
-  # Set all at once
-  tyk config set --dash-url http://localhost:3000 --auth-token token --org-id org`,
+  # Set multiple values at once
+  tyk config set dashboard-url https://api.tyk.io auth-token token org-id org`,
 		RunE: runConfigSet,
 	}
 
-	cmd.Flags().String("dash-url", "", "Tyk Dashboard URL")
-	cmd.Flags().String("auth-token", "", "Dashboard API auth token")  
-	cmd.Flags().String("org-id", "", "Organization ID")
+	cmd.Flags().String("dashboard-url", "", "Update dashboard URL")
+	cmd.Flags().String("auth-token", "", "Update auth token")  
+	cmd.Flags().String("org-id", "", "Update organization ID")
 
 	return cmd
 }
 
-// NewConfigGetCommand creates the 'tyk config get' command
-func NewConfigGetCommand() *cobra.Command {
+// NewConfigRemoveCommand creates the 'tyk config remove' command
+func NewConfigRemoveCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get",
-		Short: "Display current configuration",
-		Long:  "Display the current global configuration values",
-		RunE:  runConfigGet,
+		Use:   "remove <environment-name>",
+		Short: "Remove an environment",
+		Long:  "Remove an environment from the configuration",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runConfigRemove,
 	}
 
 	return cmd
 }
 
-// NewConfigUnsetCommand creates the 'tyk config unset' command
-func NewConfigUnsetCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "unset",
-		Short: "Remove configuration values",
-		Long: `Remove global configuration values.
-
-Examples:
-  tyk config unset --auth-token
-  tyk config unset --all`,
-		RunE: runConfigUnset,
-	}
-
-	cmd.Flags().Bool("dash-url", false, "Remove dashboard URL")
-	cmd.Flags().Bool("auth-token", false, "Remove auth token")
-	cmd.Flags().Bool("org-id", false, "Remove organization ID")
-	cmd.Flags().Bool("all", false, "Remove all configuration")
-
-	return cmd
-}
-
-func runConfigSet(cmd *cobra.Command, args []string) error {
-	dashURL, _ := cmd.Flags().GetString("dash-url")
-	authToken, _ := cmd.Flags().GetString("auth-token")
-	orgID, _ := cmd.Flags().GetString("org-id")
-
-	if dashURL == "" && authToken == "" && orgID == "" {
-		return fmt.Errorf("at least one configuration value must be provided")
-	}
-
-	// Get config directory
-	configDir, err := getConfigDir()
-	if err != nil {
-		return fmt.Errorf("failed to get config directory: %w", err)
-	}
-
-	configFile := filepath.Join(configDir, "cli.toml")
-	
-	// Load existing config
+func runConfigList(cmd *cobra.Command, args []string) error {
 	manager := config.NewManager()
-	
-	// Try to load existing config file (ignore errors if file doesn't exist)
-	if _, err := os.Stat(configFile); err == nil {
-		if err := manager.LoadConfig(); err != nil {
-			return fmt.Errorf("failed to load existing config: %w", err)
-		}
+	if err := manager.LoadConfig(); err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Update with new values
-	if dashURL != "" || authToken != "" || orgID != "" {
-		manager.SetFromFlags(dashURL, authToken, orgID)
-	}
-
-	// Get the updated config
 	cfg := manager.GetConfig()
+	environments := manager.ListEnvironments()
 
-	// Create config file content
-	content := generateTOMLConfig(cfg)
-
-	// Ensure config directory exists
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
+	if len(environments) == 0 {
+		yellow := color.New(color.FgYellow)
+		yellow.Println("No environments configured.")
+		fmt.Println("Use 'tyk config add <name> ...' to add an environment.")
+		return nil
 	}
 
-	// Write config file
-	if err := os.WriteFile(configFile, []byte(content), 0600); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	fmt.Printf("Configuration saved to %s\n", configFile)
+	blue := color.New(color.FgBlue, color.Bold)
+	green := color.New(color.FgGreen, color.Bold)
+	cyan := color.New(color.FgCyan)
 	
-	// Show what was set
-	if dashURL != "" {
-		fmt.Printf("  dash_url = %s\n", dashURL)
+	blue.Printf("Default environment: ")
+	green.Printf("%s\n\n", cfg.DefaultEnvironment)
+	
+	blue.Println("Environments:")
+
+	// Sort environment names for consistent display
+	var envNames []string
+	for name := range environments {
+		envNames = append(envNames, name)
 	}
-	if authToken != "" {
-		fmt.Printf("  auth_token = %s\n", maskToken(authToken))
-	}
-	if orgID != "" {
-		fmt.Printf("  org_id = %s\n", orgID)
+	sort.Strings(envNames)
+
+	for _, name := range envNames {
+		env := environments[name]
+		if name == cfg.DefaultEnvironment {
+			green.Printf("● %s (active):\n", name)
+		} else {
+			fmt.Printf("  %s:\n", name)
+		}
+		cyan.Printf("    dashboard_url = %s\n", env.DashboardURL)
+		cyan.Printf("    auth_token    = %s\n", maskToken(env.AuthToken))
+		cyan.Printf("    org_id        = %s\n", env.OrgID)
+		fmt.Println()
 	}
 
 	return nil
 }
 
-func runConfigGet(cmd *cobra.Command, args []string) error {
+func runConfigUse(cmd *cobra.Command, args []string) error {
+	manager := config.NewManager()
+	if err := manager.LoadConfig(); err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	cfg := manager.GetConfig()
+	environments := manager.ListEnvironments()
+
+	if len(environments) == 0 {
+		return fmt.Errorf("no environments configured. Use 'tyk config add' to add an environment")
+	}
+
+	var envName string
+	
+	// If environment name was provided as argument, use it
+	if len(args) > 0 {
+		envName = args[0]
+	} else {
+		// Interactive selection
+		var err error
+		envName, err = selectEnvironmentInteractively(environments, cfg.DefaultEnvironment)
+		if err != nil {
+			return err
+		}
+		if envName == "" {
+			return fmt.Errorf("no environment selected")
+		}
+	}
+
+	// Check if environment exists
+	if _, err := manager.GetEnvironment(envName); err != nil {
+		return err
+	}
+
+	// Set as default
+	if err := manager.SetDefaultEnvironment(envName); err != nil {
+		return err
+	}
+
+	// Save to file
+	if err := saveConfigToFile(manager); err != nil {
+		return err
+	}
+
+	green := color.New(color.FgGreen, color.Bold)
+	green.Printf("✓ Switched to environment '%s'.\n", envName)
+	return nil
+}
+
+func runConfigCurrent(cmd *cobra.Command, args []string) error {
+	manager := config.NewManager()
+	if err := manager.LoadConfig(); err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	cfg := manager.GetConfig()
+	
+	if cfg.DefaultEnvironment == "" {
+		yellow := color.New(color.FgYellow)
+		yellow.Println("No default environment set.")
+		return nil
+	}
+
+	activeEnv, err := cfg.GetActiveEnvironment()
+	if err != nil {
+		return fmt.Errorf("failed to get active environment: %w", err)
+	}
+
+	blue := color.New(color.FgBlue, color.Bold)
+	green := color.New(color.FgGreen, color.Bold)
+	cyan := color.New(color.FgCyan)
+
+	blue.Println("Current environment:")
+	green.Printf("● %s (active)\n", activeEnv.Name)
+	cyan.Printf("  dashboard_url = %s\n", activeEnv.DashboardURL)
+	cyan.Printf("  auth_token    = %s\n", maskToken(activeEnv.AuthToken))
+	cyan.Printf("  org_id        = %s\n", activeEnv.OrgID)
+
+	return nil
+}
+
+func runConfigAdd(cmd *cobra.Command, args []string) error {
+	envName := args[0]
+	dashboardURL, _ := cmd.Flags().GetString("dashboard-url")
+	authToken, _ := cmd.Flags().GetString("auth-token")
+	orgID, _ := cmd.Flags().GetString("org-id")
+	setDefault, _ := cmd.Flags().GetBool("set-default")
+
+	// Create the environment
+	env := &types.Environment{
+		Name:         envName,
+		DashboardURL: dashboardURL,
+		AuthToken:    authToken,
+		OrgID:        orgID,
+	}
+
+	// Validate the environment
+	if err := env.Validate(); err != nil {
+		return err
+	}
+
+	// Load existing configuration
+	manager := config.NewManager()
+	if err := manager.LoadConfig(); err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	// Check if environment already exists
+	if _, err := manager.GetEnvironment(envName); err == nil {
+		return fmt.Errorf("environment '%s' already exists. Use 'tyk config set' to update it", envName)
+	}
+
+	// Save the environment
+	if err := manager.SaveEnvironment(env, setDefault); err != nil {
+		return fmt.Errorf("failed to save environment: %w", err)
+	}
+
+	// Save to file
+	if err := saveConfigToFile(manager); err != nil {
+		return err
+	}
+
+	green := color.New(color.FgGreen, color.Bold)
+	green.Printf("✓ Environment '%s' added successfully.\n", envName)
+	if setDefault || manager.GetConfig().DefaultEnvironment == envName {
+		green.Printf("✓ Environment '%s' set as default.\n", envName)
+	}
+
+	return nil
+}
+
+func runConfigSet(cmd *cobra.Command, args []string) error {
+	dashboardURL, _ := cmd.Flags().GetString("dashboard-url")
+	authToken, _ := cmd.Flags().GetString("auth-token")
+	orgID, _ := cmd.Flags().GetString("org-id")
+
+	if dashboardURL == "" && authToken == "" && orgID == "" {
+		return fmt.Errorf("at least one configuration value must be provided")
+	}
+
 	// Load configuration
 	manager := config.NewManager()
 	if err := manager.LoadConfig(); err != nil {
@@ -157,99 +338,107 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 
 	cfg := manager.GetConfig()
 	
-	fmt.Println("Current configuration:")
-	
-	// Show environment information if available
-	if len(cfg.Environments) > 0 {
-		fmt.Printf("  default_environment = %s\n\n", cfg.DefaultEnvironment)
-		
-		fmt.Println("Environments:")
-		for name, env := range cfg.Environments {
-			marker := ""
-			if name == cfg.DefaultEnvironment {
-				marker = " (active)"
-			}
-			fmt.Printf("  %s%s:\n", name, marker)
-			fmt.Printf("    dash_url   = %s\n", env.DashURL)
-			fmt.Printf("    auth_token = %s\n", maskToken(env.AuthToken))
-			fmt.Printf("    org_id     = %s\n", env.OrgID)
-			fmt.Println()
-		}
-	} else {
-		// Show direct config for backward compatibility
-		fmt.Printf("  dash_url   = %s\n", cfg.DashURL)
-		fmt.Printf("  auth_token = %s\n", maskToken(cfg.AuthToken))
-		fmt.Printf("  org_id     = %s\n", cfg.OrgID)
-		fmt.Println()
+	// Get active environment
+	if cfg.DefaultEnvironment == "" {
+		return fmt.Errorf("no active environment. Use 'tyk config add' to create one")
 	}
+
+	activeEnv, err := manager.GetEnvironment(cfg.DefaultEnvironment)
+	if err != nil {
+		return err
+	}
+
+	// Update the active environment
+	if dashboardURL != "" {
+		activeEnv.DashboardURL = dashboardURL
+	}
+	if authToken != "" {
+		activeEnv.AuthToken = authToken
+	}
+	if orgID != "" {
+		activeEnv.OrgID = orgID
+	}
+
+	// Validate updated environment
+	if err := activeEnv.Validate(); err != nil {
+		return err
+	}
+
+	// Save to file
+	if err := saveConfigToFile(manager); err != nil {
+		return err
+	}
+
+	green := color.New(color.FgGreen, color.Bold)
+	green.Printf("✓ Environment '%s' updated successfully.\n", activeEnv.Name)
 	
-	// Show source information
-	fmt.Println("Configuration sources (in order of precedence):")
-	fmt.Println("  1. Command line flags")
-	fmt.Println("  2. Environment variables (TYK_*)")
-	
-	configDir, err := getConfigDir()
-	if err == nil {
-		configFile := filepath.Join(configDir, "cli.toml")
-		if _, err := os.Stat(configFile); err == nil {
-			fmt.Printf("  3. Config file: %s\n", configFile)
-		} else {
-			fmt.Printf("  3. Config file: %s (not found)\n", configFile)
-		}
+	// Show what was updated
+	if dashboardURL != "" {
+		fmt.Printf("  dashboard_url = %s\n", dashboardURL)
+	}
+	if authToken != "" {
+		fmt.Printf("  auth_token    = %s\n", maskToken(authToken))
+	}
+	if orgID != "" {
+		fmt.Printf("  org_id        = %s\n", orgID)
 	}
 
 	return nil
 }
 
-func runConfigUnset(cmd *cobra.Command, args []string) error {
-	removeDashURL, _ := cmd.Flags().GetBool("dash-url")
-	removeAuthToken, _ := cmd.Flags().GetBool("auth-token")
-	removeOrgID, _ := cmd.Flags().GetBool("org-id")
-	removeAll, _ := cmd.Flags().GetBool("all")
+func runConfigRemove(cmd *cobra.Command, args []string) error {
+	envName := args[0]
 
-	if !removeDashURL && !removeAuthToken && !removeOrgID && !removeAll {
-		return fmt.Errorf("specify what to unset: --dash-url, --auth-token, --org-id, or --all")
-	}
-
-	configDir, err := getConfigDir()
-	if err != nil {
-		return fmt.Errorf("failed to get config directory: %w", err)
-	}
-
-	configFile := filepath.Join(configDir, "cli.toml")
-
-	if removeAll {
-		if err := os.Remove(configFile); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove config file: %w", err)
-		}
-		fmt.Printf("All configuration removed from %s\n", configFile)
-		return nil
-	}
-
-	// Load existing config
 	manager := config.NewManager()
-	if err := manager.LoadConfig(); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to load existing config: %w", err)
+	if err := manager.LoadConfig(); err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	cfg := manager.GetConfig()
 
-	// Remove specified values
-	if removeDashURL {
-		cfg.DashURL = ""
-		fmt.Println("Removed dash_url")
-	}
-	if removeAuthToken {
-		cfg.AuthToken = ""
-		fmt.Println("Removed auth_token")
-	}
-	if removeOrgID {
-		cfg.OrgID = ""
-		fmt.Println("Removed org_id")
+	// Check if environment exists
+	if cfg.Environments[envName] == nil {
+		return fmt.Errorf("environment '%s' not found", envName)
 	}
 
-	// Write updated config
-	content := generateTOMLConfig(cfg)
+	// Don't allow removing the last environment
+	if len(cfg.Environments) == 1 {
+		return fmt.Errorf("cannot remove the last environment")
+	}
+
+	// Remove environment
+	delete(cfg.Environments, envName)
+
+	// If this was the default, pick another one
+	if cfg.DefaultEnvironment == envName {
+		for name := range cfg.Environments {
+			cfg.DefaultEnvironment = name
+			break
+		}
+		yellow := color.New(color.FgYellow)
+		yellow.Printf("⚠ Default environment changed to '%s'.\n", cfg.DefaultEnvironment)
+	}
+
+	// Save to file
+	if err := saveConfigToFile(manager); err != nil {
+		return err
+	}
+
+	green := color.New(color.FgGreen, color.Bold)
+	green.Printf("✓ Environment '%s' removed successfully.\n", envName)
+	return nil
+}
+
+func saveConfigToFile(manager *config.Manager) error {
+	configDir, err := getConfigDir()
+	if err != nil {
+		return err
+	}
+
+	cfg := manager.GetConfig()
+	content := generateTOMLConfigUnified(cfg)
+
+	configFile := filepath.Join(configDir, "cli.toml")
 	
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
@@ -259,7 +448,6 @@ func runConfigUnset(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	fmt.Printf("Configuration updated in %s\n", configFile)
 	return nil
 }
 
@@ -271,53 +459,25 @@ func getConfigDir() (string, error) {
 	return filepath.Join(userConfigDir, "tyk"), nil
 }
 
-func generateTOMLConfig(cfg *types.Config) string {
+func generateTOMLConfigUnified(cfg *types.Config) string {
 	content := "# Tyk CLI Configuration\n"
-	content += "# This file stores global configuration for the Tyk CLI\n\n"
+	content += "# This file stores named environments for the Tyk CLI\n"
+	content += "# In the unified approach, environments ARE the configuration system\n\n"
 	
-	if cfg.DashURL != "" {
-		content += fmt.Sprintf("dash_url = \"%s\"\n", cfg.DashURL)
-	}
-	if cfg.AuthToken != "" {
-		content += fmt.Sprintf("auth_token = \"%s\"\n", cfg.AuthToken)
-	}
-	if cfg.OrgID != "" {
-		content += fmt.Sprintf("org_id = \"%s\"\n", cfg.OrgID)
+	// Set default environment
+	if cfg.DefaultEnvironment != "" {
+		content += fmt.Sprintf("default_environment = \"%s\"\n\n", cfg.DefaultEnvironment)
 	}
 	
-	return content
-}
-
-func generateTOMLConfigWithEnvironments(cfg *types.Config) string {
-	content := "# Tyk CLI Configuration\n"
-	content += "# This file stores global configuration for the Tyk CLI\n\n"
-	
-	// If we have environments, use the environment-based structure
+	// Add all environments
 	if len(cfg.Environments) > 0 {
-		// Set default environment
-		if cfg.DefaultEnvironment != "" {
-			content += fmt.Sprintf("default_environment = \"%s\"\n\n", cfg.DefaultEnvironment)
-		}
-		
-		// Add environments section
-		content += "[environments]\n"
 		for name, env := range cfg.Environments {
-			content += fmt.Sprintf("\n[environments.%s]\n", name)
+			content += fmt.Sprintf("[environments.%s]\n", name)
 			content += fmt.Sprintf("name = \"%s\"\n", env.Name)
-			content += fmt.Sprintf("dash_url = \"%s\"\n", env.DashURL)
+			content += fmt.Sprintf("dashboard_url = \"%s\"\n", env.DashboardURL)
 			content += fmt.Sprintf("auth_token = \"%s\"\n", env.AuthToken)
 			content += fmt.Sprintf("org_id = \"%s\"\n", env.OrgID)
-		}
-	} else {
-		// Backward compatibility: use direct config
-		if cfg.DashURL != "" {
-			content += fmt.Sprintf("dash_url = \"%s\"\n", cfg.DashURL)
-		}
-		if cfg.AuthToken != "" {
-			content += fmt.Sprintf("auth_token = \"%s\"\n", cfg.AuthToken)
-		}
-		if cfg.OrgID != "" {
-			content += fmt.Sprintf("org_id = \"%s\"\n", cfg.OrgID)
+			content += "\n"
 		}
 	}
 	
@@ -332,4 +492,47 @@ func maskToken(token string) string {
 		return "***"
 	}
 	return token[:4] + "****" + token[len(token)-4:]
+}
+
+func selectEnvironmentInteractively(environments map[string]*types.Environment, currentDefault string) (string, error) {
+	// Create sorted list of environment names for consistent display
+	var envNames []string
+	for name := range environments {
+		envNames = append(envNames, name)
+	}
+	sort.Strings(envNames)
+
+	// Create display options with colors and current default indicator
+	blue := color.New(color.FgBlue, color.Bold)
+	green := color.New(color.FgGreen)
+	yellow := color.New(color.FgYellow)
+	
+	var options []string
+	for _, name := range envNames {
+		env := environments[name]
+		var displayName string
+		if name == currentDefault {
+			displayName = green.Sprintf("● %s (current)", name)
+		} else {
+			displayName = fmt.Sprintf("  %s", name)
+		}
+		
+		// Add environment details
+		displayName += yellow.Sprintf(" - %s", env.DashboardURL)
+		options = append(options, displayName)
+	}
+
+	// Create the interactive prompt
+	prompt := &survey.Select{
+		Message: blue.Sprint("Select environment to switch to:"),
+		Options: options,
+		Help:    "Use arrow keys to navigate, Enter to select, Ctrl+C to cancel",
+	}
+
+	var selectedIndex int
+	if err := survey.AskOne(prompt, &selectedIndex); err != nil {
+		return "", fmt.Errorf("environment selection cancelled: %w", err)
+	}
+
+	return envNames[selectedIndex], nil
 }

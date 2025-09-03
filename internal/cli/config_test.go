@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tyktech/tyk-cli/internal/config"
 	"github.com/tyktech/tyk-cli/pkg/types"
 )
 
@@ -57,19 +59,17 @@ func TestGetConfigDir(t *testing.T) {
 }
 
 func TestEnvironmentStruct(t *testing.T) {
-	env := Environment{
+	env := types.Environment{
 		Name:      "test",
 		DashURL:   "http://localhost:3000",
 		AuthToken: "token",
 		OrgID:     "org",
-		IsActive:  true,
 	}
 	
 	assert.Equal(t, "test", env.Name)
 	assert.Equal(t, "http://localhost:3000", env.DashURL)
 	assert.Equal(t, "token", env.AuthToken)
 	assert.Equal(t, "org", env.OrgID)
-	assert.True(t, env.IsActive)
 }
 
 func TestConfigFileOperations(t *testing.T) {
@@ -140,4 +140,159 @@ func TestNewInitCommand(t *testing.T) {
 	quickFlag := cmd.Flags().Lookup("quick")
 	assert.NotNil(t, quickFlag)
 	assert.Equal(t, "bool", quickFlag.Value.Type())
+}
+
+func TestConfigSetPreservesEnvironmentStructure(t *testing.T) {
+	// Create a temporary config file
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "cli.toml")
+
+	// Create initial environment-based config
+	initialConfig := `# Tyk CLI Configuration
+# This file stores global configuration for the Tyk CLI
+
+default_environment = "development"
+
+[environments]
+
+[environments.development]
+name = "development"
+dash_url = "http://localhost:3000"
+auth_token = "old-token"
+org_id = "test-org"
+
+[environments.production]
+name = "production"
+dash_url = "https://prod.example.com"
+auth_token = "prod-token"
+org_id = "prod-org"`
+
+	err := os.WriteFile(configFile, []byte(initialConfig), 0600)
+	require.NoError(t, err)
+
+	// Set environment variable to point to our test config
+	os.Setenv("HOME", tempDir)
+	defer os.Unsetenv("HOME")
+	
+	// Create the expected config directory structure
+	configDir := filepath.Join(tempDir, ".config", "tyk")
+	err = os.MkdirAll(configDir, 0755)
+	require.NoError(t, err)
+	
+	// Move config file to expected location
+	expectedConfigFile := filepath.Join(configDir, "cli.toml")
+	err = os.Rename(configFile, expectedConfigFile)
+	require.NoError(t, err)
+
+	// Create config manager and load the initial config
+	manager := config.NewManager()
+	err = manager.LoadConfig()
+	require.NoError(t, err)
+
+	// Test 1: Update only auth token - should preserve other values
+	cmd := NewConfigSetCommand()
+	cmd.SetArgs([]string{"--auth-token", "new-token"})
+
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+
+	err = cmd.Execute()
+	require.NoError(t, err)
+
+	// Reload config and verify
+	manager2 := config.NewManager()
+	err = manager2.LoadConfig()
+	require.NoError(t, err)
+
+	cfg := manager2.GetConfig()
+	require.NotNil(t, cfg)
+	
+	// Should still have environment structure
+	assert.Equal(t, "development", cfg.DefaultEnvironment)
+	assert.Len(t, cfg.Environments, 2)
+	
+	// Development environment should be updated
+	devEnv := cfg.Environments["development"]
+	require.NotNil(t, devEnv)
+	assert.Equal(t, "http://localhost:3000", devEnv.DashURL) // preserved
+	assert.Equal(t, "new-token", devEnv.AuthToken)           // updated
+	assert.Equal(t, "test-org", devEnv.OrgID)                // preserved
+	
+	// Production environment should be unchanged
+	prodEnv := cfg.Environments["production"]
+	require.NotNil(t, prodEnv)
+	assert.Equal(t, "https://prod.example.com", prodEnv.DashURL)
+	assert.Equal(t, "prod-token", prodEnv.AuthToken)
+	assert.Equal(t, "prod-org", prodEnv.OrgID)
+	
+	// Test 2: Update multiple values
+	cmd2 := NewConfigSetCommand()
+	cmd2.SetArgs([]string{"--dash-url", "http://new-url:4000", "--org-id", "new-org"})
+	cmd2.SetOut(&output)
+
+	err = cmd2.Execute()
+	require.NoError(t, err)
+
+	// Reload and verify
+	manager3 := config.NewManager()
+	err = manager3.LoadConfig()
+	require.NoError(t, err)
+
+	cfg = manager3.GetConfig()
+	devEnv = cfg.Environments["development"]
+	assert.Equal(t, "http://new-url:4000", devEnv.DashURL)    // updated
+	assert.Equal(t, "new-token", devEnv.AuthToken)            // preserved from previous test
+	assert.Equal(t, "new-org", devEnv.OrgID)                  // updated
+}
+
+func TestConfigSetWithoutEnvironments(t *testing.T) {
+	// Test legacy behavior when no environments exist
+	tempDir := t.TempDir()
+	
+	// Set environment variable to point to our test config
+	os.Setenv("HOME", tempDir)
+	defer os.Unsetenv("HOME")
+	
+	// Create the expected config directory structure
+	configDir := filepath.Join(tempDir, ".config", "tyk")
+	err := os.MkdirAll(configDir, 0755)
+	require.NoError(t, err)
+
+	cmd := NewConfigSetCommand()
+	cmd.SetArgs([]string{"--dash-url", "http://localhost:3000", "--auth-token", "test-token", "--org-id", "test-org"})
+
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+
+	err = cmd.Execute()
+	require.NoError(t, err)
+
+	// Verify the output indicates success
+	assert.Contains(t, output.String(), "Configuration saved")
+	assert.Contains(t, output.String(), "dash_url = http://localhost:3000")
+	assert.Contains(t, output.String(), "auth_token = test****oken")
+	assert.Contains(t, output.String(), "org_id = test-org")
+
+	// Verify the config file was created with correct format
+	configFile := filepath.Join(configDir, "cli.toml")
+	content, err := os.ReadFile(configFile)
+	require.NoError(t, err)
+	
+	contentStr := string(content)
+	assert.Contains(t, contentStr, `dash_url = "http://localhost:3000"`)
+	assert.Contains(t, contentStr, `auth_token = "test-token"`)
+	assert.Contains(t, contentStr, `org_id = "test-org"`)
+}
+
+func TestConfigSetValidation(t *testing.T) {
+	cmd := NewConfigSetCommand()
+	
+	// Test with no arguments - should fail
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	
+	err := cmd.Execute()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "at least one configuration value must be provided")
 }

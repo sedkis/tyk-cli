@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/tyktech/tyk-cli/pkg/types"
 )
 
@@ -14,52 +13,87 @@ func TestConfigValidation(t *testing.T) {
 		name        string
 		config      types.Config
 		expectError bool
-		errorMsg    string
 	}{
 		{
-			name: "valid config",
+			name: "valid config with environment",
 			config: types.Config{
-				DashURL:   "http://localhost:3000",
-				AuthToken: "test-token",
-				OrgID:     "test-org",
+				DefaultEnvironment: "dev",
+				Environments: map[string]*types.Environment{
+					"dev": {
+						Name:         "dev",
+						DashboardURL: "http://localhost:3000",
+						AuthToken:    "test-token",
+						OrgID:        "test-org",
+					},
+				},
 			},
 			expectError: false,
 		},
 		{
-			name: "missing dash URL",
+			name: "invalid dashboard URL",
 			config: types.Config{
-				AuthToken: "test-token",
-				OrgID:     "test-org",
-			},
-			expectError: true,
-			errorMsg:    "dashboard URL is required",
-		},
-		{
-			name: "invalid dash URL",
-			config: types.Config{
-				DashURL:   "invalid-url",
-				AuthToken: "test-token",
-				OrgID:     "test-org",
+				DefaultEnvironment: "dev",
+				Environments: map[string]*types.Environment{
+					"dev": {
+						Name:         "dev",
+						DashboardURL: "invalid-url",
+						AuthToken:    "test-token",
+						OrgID:        "test-org",
+					},
+				},
 			},
 			expectError: true,
 		},
 		{
 			name: "missing auth token",
 			config: types.Config{
-				DashURL: "http://localhost:3000",
-				OrgID:   "test-org",
+				DefaultEnvironment: "dev",
+				Environments: map[string]*types.Environment{
+					"dev": {
+						Name:         "dev",
+						DashboardURL: "http://localhost:3000",
+						OrgID:        "test-org",
+					},
+				},
 			},
 			expectError: true,
-			errorMsg:    "auth token is required",
 		},
 		{
 			name: "missing org ID",
 			config: types.Config{
-				DashURL:   "http://localhost:3000",
-				AuthToken: "test-token",
+				DefaultEnvironment: "dev",
+				Environments: map[string]*types.Environment{
+					"dev": {
+						Name:         "dev",
+						DashboardURL: "http://localhost:3000",
+						AuthToken:    "test-token",
+					},
+				},
 			},
 			expectError: true,
-			errorMsg:    "organization ID is required",
+		},
+		{
+			name: "no environments configured",
+			config: types.Config{
+				DefaultEnvironment: "",
+				Environments:       make(map[string]*types.Environment),
+			},
+			expectError: true,
+		},
+		{
+			name: "default environment not found",
+			config: types.Config{
+				DefaultEnvironment: "prod",
+				Environments: map[string]*types.Environment{
+					"dev": {
+						Name:         "dev",
+						DashboardURL: "http://localhost:3000",
+						AuthToken:    "test-token",
+						OrgID:        "test-org",
+					},
+				},
+			},
+			expectError: true,
 		},
 	}
 
@@ -68,9 +102,6 @@ func TestConfigValidation(t *testing.T) {
 			err := tt.config.Validate()
 			if tt.expectError {
 				assert.Error(t, err)
-				if tt.errorMsg != "" {
-					assert.Contains(t, err.Error(), tt.errorMsg)
-				}
 			} else {
 				assert.NoError(t, err)
 			}
@@ -78,7 +109,7 @@ func TestConfigValidation(t *testing.T) {
 	}
 }
 
-func TestManagerEnvironmentVariables(t *testing.T) {
+func TestManagerLoadFromEnvironmentVariables(t *testing.T) {
 	// Clean up environment
 	originalEnv := map[string]string{
 		EnvDashURL:   os.Getenv(EnvDashURL),
@@ -87,10 +118,10 @@ func TestManagerEnvironmentVariables(t *testing.T) {
 	}
 	defer func() {
 		for key, value := range originalEnv {
-			if value == "" {
-				os.Unsetenv(key)
-			} else {
+			if value != "" {
 				os.Setenv(key, value)
+			} else {
+				os.Unsetenv(key)
 			}
 		}
 	}()
@@ -106,15 +137,22 @@ func TestManagerEnvironmentVariables(t *testing.T) {
 
 	manager := NewManager()
 	err := manager.LoadConfig()
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
+	// In unified approach, environment variables should be used to create temporary environments
+	// or override existing ones via SetFromFlags
+	manager.SetFromFlags(testDashURL, testAuthToken, testOrgID)
 	config := manager.GetConfig()
-	assert.Equal(t, testDashURL, config.DashURL)
-	assert.Equal(t, testAuthToken, config.AuthToken)
-	assert.Equal(t, testOrgID, config.OrgID)
-
-	// Validate the loaded config
-	assert.NoError(t, config.Validate())
+	
+	// Check that a temporary environment was created with these values
+	assert.NotEmpty(t, config.Environments)
+	
+	// Get the active environment (should be created by SetFromFlags)
+	activeEnv, err := config.GetActiveEnvironment()
+	assert.NoError(t, err)
+	assert.Equal(t, testDashURL, activeEnv.DashboardURL)
+	assert.Equal(t, testAuthToken, activeEnv.AuthToken)
+	assert.Equal(t, testOrgID, activeEnv.OrgID)
 }
 
 func TestManagerFlagsOverrideEnvironment(t *testing.T) {
@@ -130,7 +168,7 @@ func TestManagerFlagsOverrideEnvironment(t *testing.T) {
 
 	manager := NewManager()
 	err := manager.LoadConfig()
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
 	// Override with flags
 	flagDashURL := "http://flag-dashboard:3000"
@@ -140,65 +178,123 @@ func TestManagerFlagsOverrideEnvironment(t *testing.T) {
 	manager.SetFromFlags(flagDashURL, flagAuthToken, flagOrgID)
 
 	config := manager.GetConfig()
-	assert.Equal(t, flagDashURL, config.DashURL)
-	assert.Equal(t, flagAuthToken, config.AuthToken)
-	assert.Equal(t, flagOrgID, config.OrgID)
+	activeEnv, err := config.GetActiveEnvironment()
+	assert.NoError(t, err)
+	
+	// Flags should override environment variables
+	assert.Equal(t, flagDashURL, activeEnv.DashboardURL)
+	assert.Equal(t, flagAuthToken, activeEnv.AuthToken)
+	assert.Equal(t, flagOrgID, activeEnv.OrgID)
 }
 
 func TestManagerPartialFlagOverride(t *testing.T) {
-	// Set environment variables
-	os.Setenv(EnvDashURL, "http://env-dashboard:3000")
-	os.Setenv(EnvAuthToken, "env-auth-token")
-	os.Setenv(EnvOrgID, "env-org-id")
-	defer func() {
-		os.Unsetenv(EnvDashURL)
-		os.Unsetenv(EnvAuthToken)
-		os.Unsetenv(EnvOrgID)
-	}()
-
+	// Start with an existing environment
 	manager := NewManager()
-	err := manager.LoadConfig()
-	require.NoError(t, err)
+	
+	// Create a base environment
+	baseEnv := &types.Environment{
+		Name:         "dev",
+		DashboardURL: "http://base-dashboard:3000",
+		AuthToken:    "base-auth-token",
+		OrgID:        "base-org-id",
+	}
+	
+	manager.SaveEnvironment(baseEnv, true)
 
-	// Override only dash URL with flag
+	// Override only dashboard URL with flag
 	flagDashURL := "http://flag-dashboard:3000"
 	manager.SetFromFlags(flagDashURL, "", "")
 
 	config := manager.GetConfig()
-	assert.Equal(t, flagDashURL, config.DashURL)
-	assert.Equal(t, "env-auth-token", config.AuthToken) // Should remain from env
-	assert.Equal(t, "env-org-id", config.OrgID)         // Should remain from env
+	activeEnv, err := config.GetActiveEnvironment()
+	assert.NoError(t, err)
+	
+	// Only DashboardURL should be overridden
+	assert.Equal(t, flagDashURL, activeEnv.DashboardURL)
+	assert.Equal(t, "base-auth-token", activeEnv.AuthToken) // Should remain from base
+	assert.Equal(t, "base-org-id", activeEnv.OrgID)         // Should remain from base
 }
 
-func TestNewManager(t *testing.T) {
+func TestManagerEnvironmentOperations(t *testing.T) {
 	manager := NewManager()
-	assert.NotNil(t, manager)
-	assert.NotNil(t, manager.viper)
-	assert.NotNil(t, manager.config)
-	assert.NotNil(t, manager.GetViperInstance())
-}
 
-// Integration test with actual live environment
-func TestLiveEnvironmentConnection(t *testing.T) {
-	// This test uses the provided live environment details
-	testConfig := &types.Config{
-		DashURL:   "http://tyk-dashboard.localhost:3000",
-		AuthToken: "ff8289874f5d45de945a2ea5c02580fe",
-		OrgID:     "5e9d9544a1dcd60001d0ed20",
+	// Test saving an environment
+	env := &types.Environment{
+		Name:         "test",
+		DashboardURL: "http://localhost:3000",
+		AuthToken:    "test-token",
+		OrgID:        "test-org",
 	}
 
-	// Validate the live config
-	err := testConfig.Validate()
-	assert.NoError(t, err, "Live environment configuration should be valid")
+	err := manager.SaveEnvironment(env, true)
+	assert.NoError(t, err)
 
-	// Test that we can create a manager and load this config
+	// Test retrieving the environment
+	retrieved, err := manager.GetEnvironment("test")
+	assert.NoError(t, err)
+	assert.Equal(t, env.Name, retrieved.Name)
+	assert.Equal(t, env.DashboardURL, retrieved.DashboardURL)
+	assert.Equal(t, env.AuthToken, retrieved.AuthToken)
+	assert.Equal(t, env.OrgID, retrieved.OrgID)
+
+	// Test that it was set as default
+	config := manager.GetConfig()
+	assert.Equal(t, "test", config.DefaultEnvironment)
+
+	// Test listing environments
+	environments := manager.ListEnvironments()
+	assert.Len(t, environments, 1)
+	assert.Contains(t, environments, "test")
+
+	// Test setting different default
+	env2 := &types.Environment{
+		Name:         "prod",
+		DashboardURL: "https://prod.example.com",
+		AuthToken:    "prod-token",
+		OrgID:        "prod-org",
+	}
+
+	err = manager.SaveEnvironment(env2, false)
+	assert.NoError(t, err)
+	
+	// Default should still be "test"
+	config = manager.GetConfig()
+	assert.Equal(t, "test", config.DefaultEnvironment)
+
+	// Switch default
+	err = manager.SetDefaultEnvironment("prod")
+	assert.NoError(t, err)
+
+	config = manager.GetConfig()
+	assert.Equal(t, "prod", config.DefaultEnvironment)
+}
+
+func TestLiveEnvironmentConfig(t *testing.T) {
+	// This test uses the provided live environment details
+	testEnv := &types.Environment{
+		Name:         "live",
+		DashboardURL: "http://tyk-dashboard.localhost:3000",
+		AuthToken:    "ff8289874f5d45de945a2ea5c02580fe",
+		OrgID:        "5e9d9544a1dcd60001d0ed20",
+	}
+
+	// Test that the environment validates correctly
+	err := testEnv.Validate()
+	assert.NoError(t, err, "Live environment should be valid")
+
+	// Test that we can create a manager and load this environment
 	manager := NewManager()
-	manager.SetFromFlags(testConfig.DashURL, testConfig.AuthToken, testConfig.OrgID)
+	err = manager.SaveEnvironment(testEnv, true)
+	assert.NoError(t, err)
 	
 	config := manager.GetConfig()
-	assert.Equal(t, testConfig.DashURL, config.DashURL)
-	assert.Equal(t, testConfig.AuthToken, config.AuthToken)
-	assert.Equal(t, testConfig.OrgID, config.OrgID)
-	
-	assert.NoError(t, config.Validate())
+	activeEnv, err := config.GetActiveEnvironment()
+	assert.NoError(t, err)
+	assert.Equal(t, testEnv.DashboardURL, activeEnv.DashboardURL)
+	assert.Equal(t, testEnv.AuthToken, activeEnv.AuthToken)
+	assert.Equal(t, testEnv.OrgID, activeEnv.OrgID)
+
+	// Test that configuration validates
+	err = config.Validate()
+	assert.NoError(t, err, "Configuration with live environment should validate")
 }

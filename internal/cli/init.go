@@ -183,8 +183,8 @@ func gatherEnvironmentInfo(scanner *bufio.Scanner, envName string, isFirst bool)
 		fmt.Println()
 	}
 	
-	env.DashURL = askString(scanner, "Dashboard URL", "")
-	if env.DashURL == "" {
+	env.DashboardURL = askString(scanner, "Dashboard URL", "")
+	if env.DashboardURL == "" {
 		return nil, fmt.Errorf("dashboard URL is required")
 	}
 
@@ -260,9 +260,10 @@ func selectActiveEnvironment(scanner *bufio.Scanner, environments []*types.Envir
 
 func testConnection(env *types.Environment) error {
 	config := &types.Config{
-		DashURL:   env.DashURL,
-		AuthToken: env.AuthToken,
-		OrgID:     env.OrgID,
+		DefaultEnvironment: "test",
+		Environments: map[string]*types.Environment{
+			"test": env,
+		},
 	}
 
 	client, err := client.NewClient(config)
@@ -300,7 +301,7 @@ func saveEnvironment(env *types.Environment, setAsGlobal bool) error {
 
 	// Generate and save the updated TOML config
 	cfg := manager.GetConfig()
-	content := generateTOMLConfigWithEnvironments(cfg)
+	content := generateTOMLConfigUnified(cfg)
 
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return err

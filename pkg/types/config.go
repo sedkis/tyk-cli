@@ -7,74 +7,57 @@ import (
 )
 
 // Config holds all configuration for the Tyk CLI
+// In the unified approach, config IS environments - no base config fields
 type Config struct {
-	DashURL   string `mapstructure:"dash_url" yaml:"dash_url" json:"dash_url"`
-	AuthToken string `mapstructure:"auth_token" yaml:"auth_token" json:"auth_token"`
-	OrgID     string `mapstructure:"org_id" yaml:"org_id" json:"org_id"`
-	
-	// Environment management
+	// Default active environment
 	DefaultEnvironment string                   `mapstructure:"default_environment" yaml:"default_environment" json:"default_environment"`
+	// All named environments (this IS the configuration system)
 	Environments       map[string]*Environment  `mapstructure:"environments" yaml:"environments" json:"environments"`
 }
 
 // Environment represents a named configuration environment
+// In the unified model, environments ARE the configuration
 type Environment struct {
-	Name      string `mapstructure:"name" yaml:"name" json:"name"`
-	DashURL   string `mapstructure:"dash_url" yaml:"dash_url" json:"dash_url"`
-	AuthToken string `mapstructure:"auth_token" yaml:"auth_token" json:"auth_token"`
-	OrgID     string `mapstructure:"org_id" yaml:"org_id" json:"org_id"`
+	Name         string `mapstructure:"name" yaml:"name" json:"name"`
+	DashboardURL string `mapstructure:"dashboard_url" yaml:"dashboard_url" json:"dashboard_url"`
+	AuthToken    string `mapstructure:"auth_token" yaml:"auth_token" json:"auth_token"`
+	OrgID        string `mapstructure:"org_id" yaml:"org_id" json:"org_id"`
 }
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
-	// If we have environments, validate the active one
-	if c.DefaultEnvironment != "" && len(c.Environments) > 0 {
-		env, exists := c.Environments[c.DefaultEnvironment]
-		if !exists {
-			return fmt.Errorf("default environment '%s' not found", c.DefaultEnvironment)
-		}
-		return env.Validate()
+	// Must have at least one environment
+	if len(c.Environments) == 0 {
+		return errors.New("no environments configured. Use 'tyk config add' to add an environment")
 	}
 
-	// Otherwise validate the direct config fields
-	if c.DashURL == "" {
-		return errors.New("dashboard URL is required (TYK_DASH_URL or --dash-url)")
+	// Must have a default environment set
+	if c.DefaultEnvironment == "" {
+		return errors.New("no default environment set")
 	}
 
-	// Validate URL format
-	parsedURL, err := url.Parse(c.DashURL)
-	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-		return fmt.Errorf("invalid dashboard URL format: %s", c.DashURL)
+	// Validate that the default environment exists
+	env, exists := c.Environments[c.DefaultEnvironment]
+	if !exists {
+		return fmt.Errorf("default environment '%s' not found", c.DefaultEnvironment)
 	}
 
-	if c.AuthToken == "" {
-		return errors.New("auth token is required (TYK_AUTH_TOKEN or --auth-token)")
-	}
-
-	if c.OrgID == "" {
-		return errors.New("organization ID is required (TYK_ORG_ID or --org-id)")
-	}
-
-	return nil
+	// Validate the default environment
+	return env.Validate()
 }
 
 // GetActiveEnvironment returns the active environment configuration
 func (c *Config) GetActiveEnvironment() (*Environment, error) {
-	if c.DefaultEnvironment != "" && len(c.Environments) > 0 {
-		env, exists := c.Environments[c.DefaultEnvironment]
-		if !exists {
-			return nil, fmt.Errorf("default environment '%s' not found", c.DefaultEnvironment)
-		}
-		return env, nil
+	if c.DefaultEnvironment == "" || len(c.Environments) == 0 {
+		return nil, errors.New("no environments configured or no default environment set")
 	}
 
-	// Return config as environment for backward compatibility
-	return &Environment{
-		Name:      "default",
-		DashURL:   c.DashURL,
-		AuthToken: c.AuthToken,
-		OrgID:     c.OrgID,
-	}, nil
+	env, exists := c.Environments[c.DefaultEnvironment]
+	if !exists {
+		return nil, fmt.Errorf("default environment '%s' not found", c.DefaultEnvironment)
+	}
+
+	return env, nil
 }
 
 // GetEffectiveConfig returns the configuration values to use (from environment or direct config)
@@ -83,19 +66,23 @@ func (c *Config) GetEffectiveConfig() (string, string, string, error) {
 	if err != nil {
 		return "", "", "", err
 	}
-	return env.DashURL, env.AuthToken, env.OrgID, nil
+	return env.DashboardURL, env.AuthToken, env.OrgID, nil
 }
 
 // Validate checks if an environment configuration is valid
 func (e *Environment) Validate() error {
-	if e.DashURL == "" {
+	if e.Name == "" {
+		return errors.New("environment name is required")
+	}
+
+	if e.DashboardURL == "" {
 		return fmt.Errorf("dashboard URL is required for environment '%s'", e.Name)
 	}
 
 	// Validate URL format
-	parsedURL, err := url.Parse(e.DashURL)
+	parsedURL, err := url.Parse(e.DashboardURL)
 	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-		return fmt.Errorf("invalid dashboard URL format for environment '%s': %s", e.Name, e.DashURL)
+		return fmt.Errorf("invalid dashboard URL format for environment '%s': %s", e.Name, e.DashboardURL)
 	}
 
 	if e.AuthToken == "" {
