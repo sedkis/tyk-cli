@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tyktech/tyk-cli/internal/client"
 	"github.com/tyktech/tyk-cli/internal/filehandler"
+	"github.com/tyktech/tyk-cli/internal/oas"
 	"github.com/tyktech/tyk-cli/pkg/types"
 	"gopkg.in/yaml.v3"
 )
@@ -368,6 +369,14 @@ func runAPICreate(cmd *cobra.Command, args []string) error {
 	}
 	oasData := fileInfo.Content
 	
+	// Auto-generate x-tyk-api-gateway extensions for plain OAS documents
+	if !oas.HasTykExtensions(oasData) {
+		oasData, err = oas.AddTykExtensions(oasData)
+		if err != nil {
+			return &ExitError{Code: 2, Message: fmt.Sprintf("failed to generate Tyk extensions: %v", err)}
+		}
+	}
+	
 	// Strip any existing API ID from OAS file (create always generates new ID)
 	oasData = stripExistingAPIID(oasData)
 	
@@ -527,7 +536,7 @@ func runAPIApply(cmd *cobra.Command, args []string) error {
 	oasData := fileInfo.Content
 	
 	// Check for existing API ID in the file
-	apiID, hasID := extractAPIIDFromOAS(oasData)
+	apiID, hasID := oas.ExtractAPIIDFromTykExtensions(oasData)
 	
 	if hasID {
 		// API ID present - update existing API
@@ -535,9 +544,17 @@ func runAPIApply(cmd *cobra.Command, args []string) error {
 	} else {
 		// No API ID present
 		if !allowCreate {
-			return &ExitError{
-				Code: 2, 
-				Message: "API ID not found in file. Use 'tyk api create' to create a new API, or add --create flag to create via apply",
+			// Check if it's a plain OAS document
+			if !oas.HasTykExtensions(oasData) {
+				return &ExitError{
+					Code: 2, 
+					Message: "Plain OAS document detected (missing x-tyk-api-gateway extensions). Use 'tyk api create' for plain OAS files, or add --create flag to apply",
+				}
+			} else {
+				return &ExitError{
+					Code: 2, 
+					Message: "API ID not found in x-tyk-api-gateway.info.id. Use 'tyk api create' or add --create flag to apply",
+				}
 			}
 		}
 		
@@ -593,6 +610,15 @@ func updateExistingAPI(cmd *cobra.Command, config *types.Config, apiID string, o
 
 // createNewAPIViaApply handles creating a new API via apply --create
 func createNewAPIViaApply(cmd *cobra.Command, config *types.Config, oasData map[string]interface{}, versionName string, setDefault bool) error {
+	// Auto-generate x-tyk-api-gateway extensions for plain OAS documents
+	if !oas.HasTykExtensions(oasData) {
+		var err error
+		oasData, err = oas.AddTykExtensions(oasData)
+		if err != nil {
+			return &ExitError{Code: 2, Message: fmt.Sprintf("failed to generate Tyk extensions: %v", err)}
+		}
+	}
+	
 	// Strip any existing ID (shouldn't be there, but be safe)
 	oasData = stripExistingAPIID(oasData)
 	
