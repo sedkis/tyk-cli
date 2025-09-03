@@ -19,10 +19,34 @@ A powerful command-line interface for managing Tyk APIs and configurations. Buil
 
 ### Installation
 
+#### Homebrew (Recommended)
+
 ```bash
-# Download the latest release (replace with actual download method)
-curl -L https://github.com/tyktech/tyk-cli/releases/latest/download/tyk-cli-$(uname -s)-$(uname -m) -o tyk
-chmod +x tyk && sudo mv tyk /usr/local/bin/
+# Add the Tyk tap
+brew tap tyktech/tyk
+
+# Install the CLI
+brew install tyk
+```
+
+#### Direct Download
+
+```bash
+# Download and install the latest release
+curl -L "https://github.com/tyktech/tyk-cli/releases/latest/download/tyk-cli_$(uname -s)_$(uname -m).tar.gz" | tar xz
+sudo mv tyk /usr/local/bin/
+
+# Verify installation
+tyk --version
+```
+
+#### From Source
+
+```bash
+git clone https://github.com/tyktech/tyk-cli.git
+cd tyk-cli
+go build -o tyk .
+sudo mv tyk /usr/local/bin/
 ```
 
 ### Initialize Configuration

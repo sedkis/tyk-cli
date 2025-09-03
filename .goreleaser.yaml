@@ -1,0 +1,128 @@
+# GoReleaser configuration for Tyk CLI
+project_name: tyk-cli
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: tyk
+    binary: tyk
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Build flags to embed version info
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.buildTime={{.Date}}
+    # Skip building for specific combinations if needed
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: default
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      # Add any other files you want in the release
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^style:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: 'New Features'
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: 'Performance Improvements'
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: 'Others'
+      order: 999
+
+# Homebrew tap configuration
+brews:
+  - name: tyk
+    tap:
+      owner: tyktech
+      name: homebrew-tyk
+      # This will create/update the homebrew-tyk repository
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    homepage: "https://github.com/tyktech/tyk-cli"
+    description: "Command-line interface for managing Tyk APIs and configurations"
+    license: "MIT"
+    # Dependencies
+    dependencies:
+      - name: curl
+    # Test command
+    test: |
+      system "#{bin}/tyk --version"
+    # Install instructions
+    install: |
+      bin.install "tyk"
+
+# GitHub release configuration
+release:
+  github:
+    owner: tyktech
+    name: tyk-cli
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Tyk CLI {{.Tag}}
+    
+    Welcome to this new release of Tyk CLI! 🎉
+    
+    ### Quick Install
+    ```bash
+    # Homebrew (macOS/Linux)
+    brew tap tyktech/tyk
+    brew install tyk
+    
+    # Direct download
+    curl -L https://github.com/tyktech/tyk-cli/releases/download/{{.Tag}}/tyk-cli_{{.Tag}}_$(uname -s)_$(uname -m).tar.gz | tar xz
+    sudo mv tyk /usr/local/bin/
+    ```
+  footer: |
+    **Full Changelog**: https://github.com/tyktech/tyk-cli/compare/{{.PreviousTag}}...{{.Tag}}
+    
+    ---
+    
+    🤖 This release was created automatically by [GoReleaser](https://goreleaser.com/).
+
+# Announce to external services (optional)
+# announce:
+#   twitter:
+#     enabled: true
+#     message_template: "Tyk CLI {{.Tag}} is out! Check it out: {{ .ReleaseURL }}"
