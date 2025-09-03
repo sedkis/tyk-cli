@@ -76,6 +76,7 @@ brews:
     tap:
       owner: sedkis
       name: homebrew-tyk
+      token: "{{ .Env.GITHUB_TOKEN }}"
       # This will create/update the homebrew-tyk repository
     commit_author:
       name: goreleaserbot
