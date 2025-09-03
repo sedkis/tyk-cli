@@ -4,9 +4,10 @@ import "encoding/json"
 
 // APIResponse represents the response structure from Tyk Dashboard API
 type APIResponse struct {
-	Status  string                 `json:"Status"`
-	Message string                 `json:"Message"`
-	Meta    map[string]interface{} `json:"Meta"`
+	Status  string `json:"Status"`
+	Message string `json:"Message"`
+	Meta    string `json:"Meta"`
+	ID      string `json:"ID,omitempty"`
 }
 
 // OASAPIResponse represents an OAS API response from Tyk Dashboard

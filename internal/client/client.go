@@ -206,35 +206,43 @@ func (c *Client) GetOASAPI(ctx context.Context, apiID string, versionName string
 }
 
 // CreateOASAPI creates a new OAS API
-func (c *Client) CreateOASAPI(ctx context.Context, req *types.CreateOASAPIRequest) (*types.OASAPI, error) {
-	resp, err := c.doRequest(ctx, http.MethodPost, OASAPIsPath, req)
+func (c *Client) CreateOASAPI(ctx context.Context, oasDocument map[string]interface{}) (*types.OASAPI, error) {
+	resp, err := c.doRequest(ctx, http.MethodPost, OASAPIsPath, oasDocument)
 	if err != nil {
 		return nil, err
 	}
 
-	var result types.OASAPIResponse
+	var result types.APIResponse
 	if err := c.handleResponse(resp, &result); err != nil {
 		return nil, err
 	}
 
-	return result.API, nil
+	// Create response only returns basic info, need to get full API details
+	if result.ID == "" {
+		return nil, fmt.Errorf("create response missing API ID")
+	}
+
+	// Retrieve the full API details
+	return c.GetOASAPI(ctx, result.ID, "")
 }
 
 // UpdateOASAPI updates an existing OAS API
-func (c *Client) UpdateOASAPI(ctx context.Context, apiID string, req *types.UpdateOASAPIRequest) (*types.OASAPI, error) {
+func (c *Client) UpdateOASAPI(ctx context.Context, apiID string, oasDocument map[string]interface{}) (*types.OASAPI, error) {
 	apiPath := fmt.Sprintf(OASAPIPath, url.PathEscape(apiID))
 
-	resp, err := c.doRequest(ctx, http.MethodPut, apiPath, req)
+	resp, err := c.doRequest(ctx, http.MethodPut, apiPath, oasDocument)
 	if err != nil {
 		return nil, err
 	}
 
-	var result types.OASAPIResponse
+	var result types.APIResponse
 	if err := c.handleResponse(resp, &result); err != nil {
 		return nil, err
 	}
 
-	return result.API, nil
+	// Update response only returns basic info, need to get full API details
+	// Retrieve the full API details using the provided API ID
+	return c.GetOASAPI(ctx, apiID, "")
 }
 
 // DeleteOASAPI deletes an OAS API by ID
