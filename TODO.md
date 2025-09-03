@@ -17,6 +17,12 @@ Based on the design document, this TODO plan outlines the implementation phases 
 - Complete test suite with >80% coverage including live environment validation
 - Modern CLI framework with Cobra and enhanced user experience
 
+**✅ Auto-Generation Enhancement (Latest)**
+- Automatic x-tyk-api-gateway extension generation for plain OAS documents
+- Smart command semantics: `create` works with any OAS, `apply` requires explicit intent
+- Seamless import workflow: users can use plain OpenAPI specs directly
+- GitOps-ready with proper ID-based tracking and declarative operations
+
 ## Phase 1: Foundation & Setup ✅ COMPLETED
 
 ### [✅] 1. Project Structure & Dependencies
@@ -86,39 +92,47 @@ Based on the design document, this TODO plan outlines the implementation phases 
 - [✅] **Enhanced**: Proper OAS document parsing with Tyk extensions
 - [✅] **Tested**: Works with live API ID `b84fe1a04e5648927971c0557971565c`
 
-### [ ] 7. `tyk api create` Command (Refactor for Explicit Creation)
-- [ ] **Refactor**: Simplify to explicit creation only (always generates new ID)
-- [ ] Required flag: `--file <path>` with OAS document
-- [ ] Ignore any existing `x-tyk-api-gateway.info.id` in file
-- [ ] Optional flags:
-  - [ ] `--version-name` (defaults to info.version or v1)
-  - [ ] `--upstream-url`, `--listen-path`, `--custom-domain` (overrides)
-  - [ ] `--set-default` (default: true for first version)
-- [ ] Return new apiId and version name on success
-- [ ] Handle creation conflicts (exit code 4)
+### [✅] 7. `tyk api create` Command ✅ COMPLETED
+- [✅] **Enhanced**: Auto-generate x-tyk-api-gateway extensions for plain OAS documents
+- [✅] Explicit creation only (always generates new ID)
+- [✅] Required flag: `--file <path>` with OAS document
+- [✅] Auto-generation from plain OAS:
+  - [✅] Extract `name` from `info.title`
+  - [✅] Extract `upstream.url` from `servers[0].url`
+  - [✅] Generate `listenPath` from slugified title
+  - [✅] Set sensible defaults (`active: true`, `strip: true`)
+- [✅] Ignore any existing `x-tyk-api-gateway.info.id` in file
+- [✅] Optional flags: `--version-name`, `--upstream-url`, `--listen-path`, `--custom-domain`, `--set-default`
+- [✅] Return new apiId and version name on success
+- [✅] Handle creation conflicts (exit code 4)
 
-### [ ] 8. `tyk api apply` Command (Declarative Upsert)
-- [ ] Implement file-based declarative upsert
-- [ ] Extract API ID from `x-tyk-api-gateway.info.id` extension
-- [ ] Upsert logic: ID present → update, ID missing → error or create with `--create`
-- [ ] Required flag: `--file`
-- [ ] Optional flags: `--create`, `--version-name`, `--set-default`
-- [ ] Error handling for missing ID without `--create` flag
+### [✅] 8. `tyk api apply` Command ✅ COMPLETED
+- [✅] **Enhanced**: Smart handling of plain OAS vs Tyk-enhanced OAS documents
+- [✅] File-based declarative upsert with clear semantics
+- [✅] Extract API ID from `x-tyk-api-gateway.info.id` extension
+- [✅] Upsert logic:
+  - [✅] Plain OAS without `--create` → Error with helpful message
+  - [✅] Plain OAS with `--create` → Auto-generate extensions and create
+  - [✅] Tyk OAS with ID → Update existing API
+  - [✅] Tyk OAS without ID → Error (use `--create` or `tyk api create`)
+- [✅] Required flag: `--file`
+- [✅] Optional flags: `--create`, `--version-name`, `--set-default`
+- [✅] Comprehensive error handling with user guidance
 
-### [ ] 9. `tyk api update` Command (Explicit Update)
-- [ ] Implement explicit API update operation
-- [ ] Required: `--api-id` (flag) OR ID in file via `x-tyk-api-gateway.info.id`
-- [ ] Required: `--file` with OAS document
-- [ ] Optional flags: `--version-name`, `--set-default`
-- [ ] PUT operation to Dashboard API
-- [ ] Handle API/version not found errors
+### [✅] 9. `tyk api update` Command ✅ COMPLETED
+- [✅] Explicit API update operation
+- [✅] Required: `--api-id` (flag) OR ID in file via `x-tyk-api-gateway.info.id`
+- [✅] Required: `--file` with OAS document
+- [✅] Optional flags: `--version-name`, `--set-default`
+- [✅] PUT operation to Dashboard API
+- [✅] Handle API/version not found errors
 
-### [ ] 10. `tyk api delete` Command
-- [ ] Implement API deletion by ID
-- [ ] Required flag: `--api-id`
-- [ ] Confirmation prompt (unless `--yes` provided)
-- [ ] Success message: "Deleted API <id>"
-- [ ] Handle API not found errors
+### [✅] 10. `tyk api delete` Command ✅ COMPLETED
+- [✅] API deletion by ID with confirmation
+- [✅] Required argument: `<api-id>`
+- [✅] Confirmation prompt (unless `--yes` provided)
+- [✅] Success message with API details
+- [✅] Handle API not found errors (exit code 3)
 
 
 ## Phase 3: Enhanced Command Features
