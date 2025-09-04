@@ -257,41 +257,40 @@ func outputAPIAsHuman(api *types.OASAPI, requestedVersion string) error {
 	
 	blue := color.New(color.FgBlue, color.Bold)
 	green := color.New(color.FgGreen, color.Bold)
-	cyan := color.New(color.FgCyan)
 	yellow := color.New(color.FgYellow)
 	
-	// API Summary
-	blue.Println("API Summary:")
-	fmt.Printf("  ID:             %s\n", api.ID)
-	fmt.Printf("  Name:           %s\n", api.Name)
-	fmt.Printf("  Listen Path:    %s\n", api.ListenPath)
-	fmt.Printf("  Default Version: ")
-	green.Printf("%s\n", api.DefaultVersion)
+	// API Summary - output to stderr so stdout can be cleanly redirected
+	blue.Fprintln(os.Stderr, "API Summary:")
+	fmt.Fprintf(os.Stderr, "  ID:             %s\n", api.ID)
+	fmt.Fprintf(os.Stderr, "  Name:           %s\n", api.Name)
+	fmt.Fprintf(os.Stderr, "  Listen Path:    %s\n", api.ListenPath)
+	fmt.Fprintf(os.Stderr, "  Default Version: ")
+	green.Fprintf(os.Stderr, "%s\n", api.DefaultVersion)
 	
 	if api.CustomDomain != "" {
-		fmt.Printf("  Custom Domain:  %s\n", api.CustomDomain)
+		fmt.Fprintf(os.Stderr, "  Custom Domain:  %s\n", api.CustomDomain)
 	}
 	if api.UpstreamURL != "" {
-		fmt.Printf("  Upstream URL:   %s\n", api.UpstreamURL)
+		fmt.Fprintf(os.Stderr, "  Upstream URL:   %s\n", api.UpstreamURL)
 	}
 	
-	fmt.Printf("  Created:        %s\n", api.CreatedAt)
-	fmt.Printf("  Updated:        %s\n", api.UpdatedAt)
+	fmt.Fprintf(os.Stderr, "  Created:        %s\n", api.CreatedAt)
+	fmt.Fprintf(os.Stderr, "  Updated:        %s\n", api.UpdatedAt)
 	
 	// Versions summary
 	if len(api.VersionData) > 0 {
-		fmt.Println()
-		blue.Println("Available Versions:")
+		fmt.Fprintln(os.Stderr)
+		blue.Fprintln(os.Stderr, "Available Versions:")
 		for versionName := range api.VersionData {
 			marker := ""
 			if versionName == api.DefaultVersion {
 				marker = green.Sprint(" (default)")
 			}
-			fmt.Printf("  - %s%s\n", versionName, marker)
+			fmt.Fprintf(os.Stderr, "  - %s%s\n", versionName, marker)
 		}
 	}
 	
-	fmt.Println()
+	fmt.Fprintln(os.Stderr)
 	
 	// Determine which OAS to show
 	var oasData map[string]interface{}
@@ -306,7 +305,7 @@ func outputAPIAsHuman(api *types.OASAPI, requestedVersion string) error {
 			// Fallback to main OAS if version not found
 			oasData = api.OAS
 			versionToShow = "main"
-			yellow.Printf("Warning: Version '%s' not found, showing main OAS document\n\n", requestedVersion)
+			yellow.Fprintf(os.Stderr, "Warning: Version '%s' not found, showing main OAS document\n\n", requestedVersion)
 		}
 	} else {
 		// No specific version requested, show main OAS
@@ -315,21 +314,23 @@ func outputAPIAsHuman(api *types.OASAPI, requestedVersion string) error {
 	}
 	
 	if oasData != nil {
-		blue.Printf("OpenAPI Specification")
+		// Header to stderr
+		blue.Fprintf(os.Stderr, "OpenAPI Specification")
 		if versionToShow != "main" {
-			blue.Printf(" (version: %s)", versionToShow)
+			blue.Fprintf(os.Stderr, " (version: %s)", versionToShow)
 		}
-		blue.Println(":")
+		blue.Fprintln(os.Stderr, ":")
 		
-		// Convert to YAML for better readability
+		// Convert to YAML for better readability and output to stdout
 		yamlData, err := yaml.Marshal(oasData)
 		if err != nil {
 			return fmt.Errorf("failed to convert OAS to YAML: %w", err)
 		}
 		
-		cyan.Print(string(yamlData))
+		// Output YAML to stdout (no color for clean piping)
+		fmt.Print(string(yamlData))
 	} else {
-		yellow.Println("No OAS document available")
+		yellow.Fprintln(os.Stderr, "No OAS document available")
 	}
 	
 	return nil

@@ -124,9 +124,3 @@ release:
     ---
     
     🤖 This release was created automatically by [GoReleaser](https://goreleaser.com/).
-
-# Announce to external services (optional)
-# announce:
-#   twitter:
-#     enabled: true
-#     message_template: "Tyk CLI {{.Tag}} is out! Check it out: {{ .ReleaseURL }}"
