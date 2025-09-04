@@ -1,0 +1,225 @@
+openapi: 3.0.3
+info:
+  title: Simple Pet Store API
+  description: A simple REST API for managing pets
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@petstore.com
+
+servers:
+  - url: https://api.petstore.com/v1
+    description: Production server
+  - url: https://staging.petstore.com/v1
+    description: Staging server
+
+x-tyk-api-gateway:
+  info:
+    name: pet-store-api
+    id: pet-store-api-123
+    state:
+      active: true
+  upstream:
+    url: https://backend.petstore.com
+  server:
+    listenPath:
+      value: /pets/
+      strip: true
+
+paths:
+  /pets:
+    get:
+      summary: List all pets
+      description: Returns a list of all pets in the store
+      operationId: listPets
+      tags:
+        - pets
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of pets to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: A list of pets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Pet'
+        '400':
+          description: Invalid request
+        '500':
+          description: Internal server error
+
+    post:
+      summary: Create a new pet
+      description: Adds a new pet to the store
+      operationId: createPet
+      tags:
+        - pets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewPet'
+      responses:
+        '201':
+          description: Pet created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '400':
+          description: Invalid input
+        '500':
+          description: Internal server error
+
+  /pets/{petId}:
+    get:
+      summary: Get a pet by ID
+      description: Returns details of a specific pet
+      operationId: getPetById
+      tags:
+        - pets
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          description: The ID of the pet to retrieve
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Pet details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '404':
+          description: Pet not found
+        '500':
+          description: Internal server error
+
+    put:
+      summary: Update a pet
+      description: Updates an existing pet
+      operationId: updatePet
+      tags:
+        - pets
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          description: The ID of the pet to update
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewPet'
+      responses:
+        '200':
+          description: Pet updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '404':
+          description: Pet not found
+        '400':
+          description: Invalid input
+        '500':
+          description: Internal server error
+
+    delete:
+      summary: Delete a pet
+      description: Removes a pet from the store
+      operationId: deletePet
+      tags:
+        - pets
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          description: The ID of the pet to delete
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Pet deleted successfully
+        '404':
+          description: Pet not found
+        '500':
+          description: Internal server error
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required:
+        - id
+        - name
+        - category
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 123
+        name:
+          type: string
+          example: Buddy
+        category:
+          type: string
+          enum: [dog, cat, bird, fish, other]
+          example: dog
+        status:
+          type: string
+          enum: [available, pending, sold]
+          example: available
+          default: available
+        tags:
+          type: array
+          items:
+            type: string
+          example: [friendly, trained]
+        createdAt:
+          type: string
+          format: date-time
+          example: '2023-01-01T12:00:00Z'
+
+    NewPet:
+      type: object
+      required:
+        - name
+        - category
+      properties:
+        name:
+          type: string
+          example: Buddy
+        category:
+          type: string
+          enum: [dog, cat, bird, fish, other]
+          example: dog
+        status:
+          type: string
+          enum: [available, pending, sold]
+          example: available
+          default: available
+        tags:
+          type: array
+          items:
+            type: string
+          example: [friendly, trained]

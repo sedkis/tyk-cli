@@ -1,0 +1,24 @@
+theme: jekyll-theme-minimal
+title: Tyk CLI Documentation
+description: A powerful command-line interface for managing Tyk APIs and configurations
+
+plugins:
+  - jekyll-default-layout
+
+markdown: kramdown
+highlighter: rouge
+
+navigation:
+  - title: Getting Started
+    url: /getting-started
+  - title: Configuration
+    url: /configuration
+  - title: API Reference  
+    url: /api-reference
+  - title: Examples
+    url: /examples
+  - title: Contributing
+    url: /contributing
+
+github:
+  repository_url: https://github.com/tyktech/tyk-cli
