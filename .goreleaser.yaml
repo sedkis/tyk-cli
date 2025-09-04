@@ -72,29 +72,29 @@ changelog:
 
 # Homebrew tap configuration - Temporarily disabled due to token permissions
 # TODO: Set up proper GitHub token with repo permissions to enable Homebrew tap
-# brews:
-#   - name: tyk
-#     tap:
-#       owner: sedkis
-#       name: homebrew-tyk
-#       token: "{{ .Env.GITHUB_TOKEN }}"
-#       # This will create/update the homebrew-tyk repository
-#     commit_author:
-#       name: goreleaserbot
-#       email: bot@goreleaser.com
-#     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
-#     homepage: "https://github.com/sedkis/tyk-cli"
-#     description: "Command-line interface for managing Tyk APIs and configurations"
-#     license: "MIT"
-#     # Dependencies
-#     dependencies:
-#       - name: curl
-#     # Test command
-#     test: |
-#       system "#{bin}/tyk --version"
-#     # Install instructions
-#     install: |
-#       bin.install "tyk"
+brews:
+  - name: tyk
+    repository:
+      owner: sedkis
+      name: homebrew-tyk
+      token: "{{ .Env.GITHUB_TOKEN }}"
+      # This will create/update the homebrew-tyk repository
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    homepage: "https://github.com/sedkis/tyk-cli"
+    description: "Command-line interface for managing Tyk APIs and configurations"
+    license: "MIT"
+    # Dependencies
+    dependencies:
+      - name: curl
+    # Test command
+    test: |
+      system "#{bin}/tyk --version"
+    # Install instructions
+    install: |
+      bin.install "tyk"
 
 # GitHub release configuration
 release:

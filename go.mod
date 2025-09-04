@@ -3,6 +3,8 @@ module github.com/tyktech/tyk-cli
 go 1.24.4
 
 require (
+	github.com/AlecAivazis/survey/v2 v2.3.7
+	github.com/fatih/color v1.18.0
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.11.1
@@ -10,9 +12,7 @@ require (
 )
 
 require (
-	github.com/AlecAivazis/survey/v2 v2.3.7 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
