@@ -70,7 +70,7 @@ tyk init --skip-test
 tyk init                    # Full setup wizard with multiple environments
 tyk init --quick           # Quick single-environment setup  
 
-# Environment management (unified with configuration)
+# Environment management
 tyk config list            # List all environments
 tyk config use staging     # Switch to staging environment
 tyk config current         # Show current environment
@@ -136,8 +136,6 @@ auth_token = "prod-token"
 org_id = "prod-org-id"
 ```
 
-**Note**: Environments ARE the configuration system - no redundancy between "config" and "environments".
-
 ## 🔍 Finding Your Credentials
 
 ### Dashboard URL
@@ -152,8 +150,7 @@ org_id = "prod-org-id"
 4. Copy the **Auth Token**
 
 ### Organization ID
-- Found in your Dashboard URL: `/a/{org-id}/`
-- Or in Dashboard: **System Management** → **Organizations**
+- Found next to your API Token, in User Profile.
 
 ## 🛠️ Development
 
@@ -199,27 +196,14 @@ tyk-cli/
 
 ## 🗺️ Roadmap
 
-### 🏗️ Foundation
-- Multi-environment configuration system
-- HTTP client with Tyk Dashboard integration
-- Interactive CLI framework with colors
-- Comprehensive test suite (>80% coverage)
-
-### 🎯 Core API Management
-- `tyk api get` - Retrieve API details with optional version selection
-- `tyk api create` - Create new APIs from OAS files (explicit creation)
-- `tyk api apply` - Declarative upsert based on API ID presence
-- `tyk api update` - Update existing APIs explicitly
-- `tyk api delete` - Delete APIs with confirmation prompts
-- Full JSON output support with `--json` flag
-- Proper exit code system (0=success, 2=bad args, 3=not found, 4=conflict)
+### 🔧 Other lifecycle objects
+- Tyk Security Policies
+- Tyk API Tokens / Credentials
 
 ### 🔧 Enhanced Features
 - `tyk api convert` - Convert between OAS and Tyk API definition formats
 - Enhanced error handling and user experience improvements
 - Advanced JSON output formatting
-
-### 🚀 Future Enhancements
 - API versioning commands (`versions list/create/switch-default`)
 - API validation and linting
 - GitOps diff functionality
