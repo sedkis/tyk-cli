@@ -1,6 +1,21 @@
+---
+layout: default
+title: Getting Started
+nav_order: 2
+description: "Install and configure Tyk CLI to start managing your APIs"
+---
+
 # Getting Started with Tyk CLI
+{: .no_toc }
 
 This guide will help you install and configure the Tyk CLI to start managing your APIs.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
 
 ## Prerequisites
 

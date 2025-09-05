@@ -1,6 +1,22 @@
+---
+layout: default
+title: CI/CD Integration
+parent: Examples
+nav_order: 1
+description: "Integrate Tyk CLI into CI/CD pipelines for automated API deployment"
+---
+
 # CI/CD Integration
+{: .no_toc }
 
 Examples of integrating Tyk CLI into your CI/CD pipelines for automated API deployment.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
 
 ## GitHub Actions
 

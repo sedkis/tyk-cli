@@ -1,6 +1,21 @@
+---
+layout: default
+title: Configuration
+nav_order: 3
+description: "Environment management and configuration options for Tyk CLI"
+---
+
 # Configuration Guide
+{: .no_toc }
 
 The Tyk CLI uses a unified environment/configuration system that makes it easy to work with multiple Tyk instances (dev, staging, production) and switch between them seamlessly.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
 
 ## Overview
 

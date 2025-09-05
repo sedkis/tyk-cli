@@ -1,6 +1,21 @@
+---
+layout: default
+title: API Reference
+nav_order: 4
+description: "Complete reference for all Tyk CLI commands and options"
+---
+
 # API Reference
+{: .no_toc }
 
 Complete reference for all Tyk CLI commands and options.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
 
 ## Global Flags
 

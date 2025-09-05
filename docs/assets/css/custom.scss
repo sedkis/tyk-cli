@@ -1,0 +1,76 @@
+---
+---
+
+// Enhanced callouts
+.callout {
+  margin: 1.5rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  
+  .callout-title {
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    
+    .callout-icon {
+      font-size: 1.2rem;
+    }
+  }
+  
+  .callout-content {
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.5);
+    
+    p:last-child {
+      margin-bottom: 0;
+    }
+  }
+  
+  &.callout-info {
+    border-left: 4px solid #3182ce;
+    
+    .callout-title {
+      background: #ebf8ff;
+      color: #2c5282;
+    }
+  }
+  
+  &.callout-warning {
+    border-left: 4px solid #ed8936;
+    
+    .callout-title {
+      background: #fef5e7;
+      color: #c05621;
+    }
+  }
+  
+  &.callout-danger {
+    border-left: 4px solid #e53e3e;
+    
+    .callout-title {
+      background: #fff5f5;
+      color: #c53030;
+    }
+  }
+  
+  &.callout-success {
+    border-left: 4px solid #00D4AA;
+    
+    .callout-title {
+      background: #f0fff4;
+      color: #00B894;
+    }
+  }
+  
+  &.callout-tip {
+    border-left: 4px solid #805ad5;
+    
+    .callout-title {
+      background: #faf5ff;
+      color: #553c9a;
+    }
+  }
+}

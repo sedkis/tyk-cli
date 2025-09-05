@@ -1,0 +1,8 @@
+{% capture code %}{{ include.code | markdownify }}{% endcapture %}
+<div class="language-{{ include.lang | default: 'bash' }} highlighter-rouge">
+  <div class="highlight">
+    <pre class="highlight">
+      <code>{{ code | strip_newlines }}</code>
+    </pre>
+  </div>
+</div>

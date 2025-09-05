@@ -1,0 +1,45 @@
+// Tyk brand color scheme
+@import "./color_schemes/light";
+
+// Tyk brand colors
+$tyk-primary: #00D4AA;
+$tyk-primary-dark: #00B894;
+$tyk-secondary: #FF6B6B;
+$tyk-dark: #2D3748;
+$tyk-gray: #718096;
+$tyk-light-gray: #E2E8F0;
+
+// Override theme colors
+$link-color: $tyk-primary;
+$btn-primary-color: $tyk-primary;
+$base-button-color: $tyk-primary;
+
+// Navigation colors
+$sidebar-color: #F7FAFC;
+$nav-child-link-color: $tyk-gray;
+$search-background-color: $sidebar-color;
+
+// Code highlighting
+$code-background-color: #F1F5F9;
+$border-color: $tyk-light-gray;
+
+// Custom brand colors for callouts
+$green-000: #F0FFF4;
+$green-100: #C6F6D5;
+$green-200: #9AE6B4;
+$green-300: $tyk-primary;
+
+$blue-000: #EBF8FF;
+$blue-100: #BEE3F8;
+$blue-200: #90CDF4;
+$blue-300: #63B3ED;
+
+$yellow-000: #FFFFF0;
+$yellow-100: #FEFCBF;
+$yellow-200: #FAF089;
+$yellow-300: #F6E05E;
+
+$red-000: #FFF5F5;
+$red-100: #FED7D7;
+$red-200: #FEB2B2;
+$red-300: $tyk-secondary;

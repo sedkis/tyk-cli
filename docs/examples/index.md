@@ -1,6 +1,16 @@
+---
+layout: default
+title: Examples
+nav_order: 5
+has_children: true
+description: "Real-world examples and common workflows for using the Tyk CLI"
+---
+
 # Examples
+{: .no_toc }
 
 Real-world examples and common workflows for using the Tyk CLI.
+{: .fs-6 .fw-300 }
 
 ## Quick Examples
 

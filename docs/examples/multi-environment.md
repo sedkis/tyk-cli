@@ -1,6 +1,22 @@
+---
+layout: default
+title: Multi-Environment Setup
+parent: Examples
+nav_order: 2
+description: "Manage APIs across multiple environments with Tyk CLI"
+---
+
 # Multi-Environment Setup
+{: .no_toc }
 
 Guide for managing APIs across multiple environments (dev, staging, production) with the Tyk CLI.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
 
 ## Environment Setup
 
