@@ -10,6 +10,7 @@ plugins:
   - jekyll-default-layout
   - jekyll-sitemap
   - jekyll-seo-tag
+  - jekyll-remote-theme
 
 markdown: kramdown
 highlighter: rouge
