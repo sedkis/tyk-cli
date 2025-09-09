@@ -1,72 +1,14 @@
-remote_theme: just-the-docs/just-the-docs
-color_scheme: tyk
-title: Tyk CLI Documentation
+remote_theme: just-the-docs/just-the-docs@v0.10.1
+title: Tyk CLI
 description: A powerful command-line interface for managing Tyk APIs and configurations
 
+# GitHub Pages base configuration
 url: https://sedkis.github.io
 baseurl: /tyk-cli
 
-plugins:
-  - jekyll-default-layout
-  - jekyll-sitemap
-  - jekyll-seo-tag
-  - jekyll-remote-theme
-
-markdown: kramdown
-highlighter: rouge
-kramdown:
-  syntax_highlighter: rouge
-  syntax_highlighter_opts:
-    block:
-      line_numbers: false
-
-# Just the Docs theme configuration
-logo: "/assets/images/tyk-logo.png"
-
-# Search functionality
+# Minimal Just the Docs options
 search_enabled: true
-search:
-  heading_level: 2
-  previews: 2
-  preview_words_before: 3
-  preview_words_after: 3
-  tokenizer_separator: /[\s/]+/
-  rel_url: true
-  button: false
-
-# Navigation structure
 nav_sort: case_insensitive
-nav_external_links:
-  - title: GitHub Repository
-    url: https://github.com/sedkis/tyk-cli
-    hide_icon: false
-
-# Footer content
-footer_content: "Copyright &copy; 2024 Tyk Technologies. Distributed by an <a href=\"https://github.com/sedkis/tyk-cli/tree/main/LICENSE\">MIT license.</a>"
-
-# Back to top link
-back_to_top: true
-back_to_top_text: "Back to top"
-
-# GitHub metadata
-github:
-  repository_url: https://github.com/sedkis/tyk-cli
-  edit_page: true
-
-# Callouts (for tips, warnings, etc.)
-callouts_level: quiet
-callouts:
-  highlight:
-    color: yellow
-  important:
-    title: Important
-    color: blue
-  new:
-    title: New
-    color: green
-  note:
-    title: Note
-    color: purple
-  warning:
-    title: Warning
-    color: red
+aux_links:
+  GitHub:
+    - https://github.com/sedkis/tyk-cli

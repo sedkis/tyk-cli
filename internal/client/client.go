@@ -262,103 +262,104 @@ func (c *Client) DeleteOASAPI(ctx context.Context, apiID string) error {
 	return c.handleResponse(resp, nil)
 }
 
-// ListOASAPIs retrieves a paginated list of OAS APIs. Page numbers are 1-based.
+// ListOASAPIs retrieves a paginated list of OAS APIs from the OAS endpoint. Page numbers are 1-based.
 func (c *Client) ListOASAPIs(ctx context.Context, page int) ([]*types.OASAPI, error) {
-	// Try using the regular APIs endpoint instead of OAS-specific endpoint
-	listPath := "/api/apis"
+    listPath := OASAPIsPath
+    if page > 0 {
+        values := url.Values{}
+        values.Set("p", fmt.Sprintf("%d", page))
+        listPath += "?" + values.Encode()
+    }
 
-	// Add pagination if provided
-	if page > 0 {
-		values := url.Values{}
-		values.Set("p", fmt.Sprintf("%d", page))
-		listPath += "?" + values.Encode()
-	}
+    resp, err := c.doRequest(ctx, http.MethodGet, listPath, nil)
+    if err != nil {
+        return nil, err
+    }
 
-	resp, err := c.doRequest(ctx, http.MethodGet, listPath, nil)
-	if err != nil {
-		return nil, err
-	}
+    var result types.OASAPIListResponse
+    if err := c.handleResponse(resp, &result); err != nil {
+        return nil, err
+    }
+    return result.APIs, nil
+}
 
-	// Read the response body directly like GetOASAPI does
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
+// ListAPIsDashboard retrieves a paginated list of APIs from the Dashboard aggregate endpoint and maps them.
+func (c *Client) ListAPIsDashboard(ctx context.Context, page int) ([]*types.OASAPI, error) {
+    listPath := "/api/apis"
+    if page > 0 {
+        values := url.Values{}
+        values.Set("p", fmt.Sprintf("%d", page))
+        listPath += "?" + values.Encode()
+    }
 
-	// Handle error status codes
-	if resp.StatusCode >= 400 {
-		var errorResp types.ErrorResponse
-		errorResp.Status = resp.StatusCode
-		errorResp.Message = string(body)
+    resp, err := c.doRequest(ctx, http.MethodGet, listPath, nil)
+    if err != nil {
+        return nil, err
+    }
 
-		// Try to parse as JSON error response
-		if err := json.Unmarshal(body, &errorResp); err != nil {
-			errorResp.Message = fmt.Sprintf("%s: %s", resp.Status, string(body))
-		}
+    // Read the response body directly
+    defer resp.Body.Close()
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read response body: %w", err)
+    }
 
-		return nil, &errorResp
-	}
+    if resp.StatusCode >= 400 {
+        var errorResp types.ErrorResponse
+        errorResp.Status = resp.StatusCode
+        errorResp.Message = string(body)
+        if err := json.Unmarshal(body, &errorResp); err != nil {
+            errorResp.Message = fmt.Sprintf("%s: %s", resp.Status, string(body))
+        }
+        return nil, &errorResp
+    }
 
-	// Parse the actual Tyk Dashboard API response format
-	var dashboardResponse map[string]interface{}
-	if err := json.Unmarshal(body, &dashboardResponse); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal dashboard API response: %w", err)
-	}
+    var dashboardResponse map[string]interface{}
+    if err := json.Unmarshal(body, &dashboardResponse); err != nil {
+        return nil, fmt.Errorf("failed to unmarshal dashboard API response: %w", err)
+    }
 
-	// Extract the APIs array
-	apisArray, ok := dashboardResponse["apis"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid response format: 'apis' field not found or not an array")
-	}
+    apisArray, ok := dashboardResponse["apis"].([]interface{})
+    if !ok {
+        return nil, fmt.Errorf("invalid response format: 'apis' field not found or not an array")
+    }
 
-	// Convert to our expected format
-	var apis []*types.OASAPI
-	for _, apiItemInterface := range apisArray {
-		apiItem, ok := apiItemInterface.(map[string]interface{})
-		if !ok {
-			continue
-		}
+    var apis []*types.OASAPI
+    for _, apiItemInterface := range apisArray {
+        apiItem, ok := apiItemInterface.(map[string]interface{})
+        if !ok {
+            continue
+        }
+        apiDefInterface, ok := apiItem["api_definition"]
+        if !ok {
+            continue
+        }
+        apiDef, ok := apiDefInterface.(map[string]interface{})
+        if !ok {
+            continue
+        }
 
-		// Extract api_definition
-		apiDefInterface, ok := apiItem["api_definition"]
-		if !ok {
-			continue
-		}
-		apiDef, ok := apiDefInterface.(map[string]interface{})
-		if !ok {
-			continue
-		}
+        apiID, _ := apiDef["api_id"].(string)
+        name, _ := apiDef["name"].(string)
+        var listenPath string
+        if proxyInterface, ok := apiDef["proxy"]; ok {
+            if proxy, ok := proxyInterface.(map[string]interface{}); ok {
+                if path, ok := proxy["listen_path"].(string); ok {
+                    listenPath = path
+                }
+            }
+        }
 
-		// Extract basic info
-		apiID, _ := apiDef["api_id"].(string)
-		name, _ := apiDef["name"].(string)
-		
-		// Extract listen path from proxy
-		var listenPath string
-		if proxyInterface, ok := apiDef["proxy"]; ok {
-			if proxy, ok := proxyInterface.(map[string]interface{}); ok {
-				if path, ok := proxy["listen_path"].(string); ok {
-					listenPath = path
-				}
-			}
-		}
-
-		// Include all APIs (since the command is meant to list APIs that can be managed as OAS)
-		// The filtering was too restrictive and excluding most APIs
-		if apiID != "" {
-			api := &types.OASAPI{
-				ID:             apiID,
-				Name:           name,
-				ListenPath:     listenPath,
-				DefaultVersion: "v1", // Default since this info isn't easily available
-				OAS:            nil,  // We could parse this from apiItem["oas"] if needed
-			}
-			apis = append(apis, api)
-		}
-	}
-
-	return apis, nil
+        if apiID != "" {
+            apis = append(apis, &types.OASAPI{
+                ID:             apiID,
+                Name:           name,
+                ListenPath:     listenPath,
+                DefaultVersion: "v1",
+            })
+        }
+    }
+    return apis, nil
 }
 
 // ListOASAPIVersions lists all versions for an OAS API

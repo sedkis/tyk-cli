@@ -1,0 +1,8 @@
+source "https://rubygems.org"
+
+# Match the GitHub Pages build as closely as possible
+gem "github-pages", group: :jekyll_plugins
+
+# Required to run `jekyll serve` on Ruby 3+
+gem "webrick", "~> 1.8"
+

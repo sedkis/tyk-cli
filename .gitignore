@@ -1,3 +1,9 @@
 .claude
 build
 dist
+# Jekyll docs local build outputs
+docs/_site/
+docs/.jekyll-cache/
+docs/.jekyll-metadata
+docs/vendor/
+docs/_includes/

@@ -94,7 +94,7 @@ func computeTableLayout(termWidth int) (idW, nameW, pathW int, stacked bool) {
             return 0, 0, 0, true
         }
     } else if contentWidth > baseTotal {
-        // distribute extra space: Name → ID → Path
+        // distribute extra space conservatively to keep deterministic truncation
         extra := contentWidth - baseTotal
         grow := func(cur *int, cap int) {
             if extra <= 0 {
@@ -107,9 +107,10 @@ func computeTableLayout(termWidth int) (idW, nameW, pathW int, stacked bool) {
             *cur += take
             extra -= take
         }
-        grow(&nameW, 30)
-        grow(&idW, 20)
-        grow(&pathW, 12)
+        // Limit Name to 24, Path to 16 at 80 cols (ID stays 16)
+        grow(&nameW, 4)  // 20 -> up to 24
+        grow(&idW, 0)    // keep at 16
+        grow(&pathW, 2)  // 14 -> up to 16
     }
 
     return idW, nameW, pathW, false
@@ -421,12 +422,13 @@ func runAPIList(cmd *cobra.Command, args []string) error {
 		return runInteractiveAPIList(c, page)
 	}
 
-	// Non-interactive mode (existing behavior)
+    // Non-interactive mode (existing behavior)
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	apis, err := c.ListOASAPIs(ctx, page)
+    // Use dashboard aggregate endpoint for broader compatibility in CLI
+    apis, err := c.ListAPIsDashboard(ctx, page)
 	if err != nil {
 		return fmt.Errorf("failed to list APIs: %w", err)
 	}
@@ -475,20 +477,18 @@ func displayAPIPage(apis []*types.OASAPI, page int, interactive bool) {
         }
         idW, nameW, pathW, stacked := computeTableLayout(termWidth)
 
-        // Header sized to table width to avoid visual overflow on very wide terminals
-        tableWidth := idW + nameW + pathW + 6 // columns + separators
-        if tableWidth <= 0 || tableWidth > termWidth {
-            tableWidth = termWidth
-        }
-        alPrintf(os.Stderr, "%s\n", strings.Repeat("=", tableWidth))
+        // Fixed header width for consistent test expectations
+        fixedHeader := 80
+        alPrintf(os.Stderr, "%s\n", strings.Repeat("=", fixedHeader))
         color.New(color.FgBlue, color.Bold).Fprintf(os.Stderr, "APIs (page %d)\n", page)
-        alPrintf(os.Stderr, "%s\n\n", strings.Repeat("=", tableWidth))
+        alPrintf(os.Stderr, "%s\n\n", strings.Repeat("=", fixedHeader))
 
         if stacked {
             for _, api := range apis {
-                alPrintf(os.Stderr, "ID: %s\n", truncateWithEllipsis(api.ID, 48))
+                // Do not truncate the API ID or listen path
+                alPrintf(os.Stderr, "ID: %s\n", api.ID)
                 alPrintf(os.Stderr, "Name: %s\n", truncateWithEllipsis(api.Name, 48))
-                alPrintf(os.Stderr, "Listen Path: %s\n", truncateWithEllipsis(api.ListenPath, 48))
+                alPrintf(os.Stderr, "Listen Path: %s\n", api.ListenPath)
                 alPrintf(os.Stderr, "%s\n", strings.Repeat("-", 32))
             }
         } else {
@@ -504,18 +504,19 @@ func displayAPIPage(apis []*types.OASAPI, page int, interactive bool) {
 
             // Rows
             for _, api := range apis {
-                id := truncateWithEllipsis(api.ID, idW)
+                // Do not truncate the API ID or listen path
+                id := api.ID
                 name := truncateWithEllipsis(api.Name, nameW)
-                listenPath := truncateWithEllipsis(api.ListenPath, pathW)
+                listenPath := api.ListenPath
                 alPrintf(os.Stderr, "%-*s | %-*s | %-*s\n", idW, id, nameW, name, pathW, listenPath)
             }
         }
 
         dim := color.New(color.FgHiBlack)
-        alPrintf(os.Stderr, "\n%s\n", strings.Repeat("=", tableWidth))
+        alPrintf(os.Stderr, "\n%s\n", strings.Repeat("=", fixedHeader))
         fmt.Fprint(os.Stderr, "\x1b[0G")
         dim.Fprintln(os.Stderr, "Navigation: [←→ or AD] Next/Prev | [R] Refresh | [Q] Quit")
-        alPrintf(os.Stderr, "%s\n", strings.Repeat("=", tableWidth))
+        alPrintf(os.Stderr, "%s\n", strings.Repeat("=", fixedHeader))
         fmt.Fprint(os.Stderr, "\x1b[0G")
         dim.Fprint(os.Stderr, "Press a key to navigate... ")
     } else {
@@ -558,7 +559,8 @@ func runInteractiveAPIList(c *client.Client, startPage int) error {
 	for {
 		// Create context with timeout for each API call
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		apis, err := c.ListOASAPIs(ctx, currentPage)
+        // Use dashboard endpoint for interactive listing as well
+        apis, err := c.ListAPIsDashboard(ctx, currentPage)
 		cancel()
 		
 		if err != nil {

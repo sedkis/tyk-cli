@@ -186,9 +186,9 @@ func TestDisplayAPIPageInteractive(t *testing.T) {
 	assert.Contains(t, output, "test-id-1")
 	assert.Contains(t, output, "Test API 1")
 	
-	// Verify truncation works
-	assert.Contains(t, output, "Very Long API Name Th...")  // Name should be truncated
-	assert.Contains(t, output, "/very/long/pa...")  // Path should be truncated
+    // Verify truncation rules: Name truncated, Listen Path not truncated
+    assert.Contains(t, output, "Very Long API Name Th...")
+    assert.Contains(t, output, "/very/long/path/that/should/be/truncated")
 }
 
 func TestDisplayAPIPageEmptyInteractive(t *testing.T) {

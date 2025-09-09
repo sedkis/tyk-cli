@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tyktech/tyk-cli/internal/cli"
 )
 
 func TestAPICreateIntegration(t *testing.T) {

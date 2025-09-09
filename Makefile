@@ -1,4 +1,4 @@
-.PHONY: build test test-integration clean install lint
+.PHONY: build test test-integration clean install lint docs-serve docs-serve-docker
 
 # Build variables
 BINARY_NAME=tyk
@@ -50,3 +50,14 @@ check: test lint
 # Development: run with sample args
 dev-run: build
 	./$(BUILD_DIR)/$(BINARY_NAME) --help
+
+# Serve docs locally with Jekyll (uses GitHub Pages gem)
+docs-serve:
+	cd docs && \
+	bundle config set path vendor/bundle && \
+	bundle install --path vendor/bundle && \
+	bundle exec jekyll serve
+
+# Serve docs using Docker (no Ruby required)
+docs-serve-docker:
+	docker run --rm -it -p 4000:4000 -v "$(PWD)":/srv/jekyll -w /srv/jekyll jekyll/jekyll:4 bash -lc "cd docs && bundle install && jekyll serve --host 0.0.0.0"
