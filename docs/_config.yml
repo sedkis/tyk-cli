@@ -3,7 +3,7 @@ color_scheme: tyk
 title: Tyk CLI Documentation
 description: A powerful command-line interface for managing Tyk APIs and configurations
 
-url: https://tyktech.github.io
+url: https://sedkis.github.io
 baseurl: /tyk-cli
 
 plugins:
@@ -37,11 +37,11 @@ search:
 nav_sort: case_insensitive
 nav_external_links:
   - title: GitHub Repository
-    url: https://github.com/tyktech/tyk-cli
+    url: https://github.com/sedkis/tyk-cli
     hide_icon: false
 
 # Footer content
-footer_content: "Copyright &copy; 2024 Tyk Technologies. Distributed by an <a href=\"https://github.com/tyktech/tyk-cli/tree/main/LICENSE\">MIT license.</a>"
+footer_content: "Copyright &copy; 2024 Tyk Technologies. Distributed by an <a href=\"https://github.com/sedkis/tyk-cli/tree/main/LICENSE\">MIT license.</a>"
 
 # Back to top link
 back_to_top: true
@@ -49,7 +49,7 @@ back_to_top_text: "Back to top"
 
 # GitHub metadata
 github:
-  repository_url: https://github.com/tyktech/tyk-cli
+  repository_url: https://github.com/sedkis/tyk-cli
   edit_page: true
 
 # Callouts (for tips, warnings, etc.)

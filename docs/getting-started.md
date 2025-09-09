@@ -180,5 +180,5 @@ tyk api apply --file my-api.yaml
 
 - Run `tyk --help` for command help
 - Use `tyk <command> --help` for specific command help
-- Check [GitHub Issues](https://github.com/tyktech/tyk-cli/issues) for known problems
+- Check [GitHub Issues](https://github.com/sedkis/tyk-cli/issues) for known problems
 - Ask questions on the [Tyk Community Forum](https://community.tyk.io/)

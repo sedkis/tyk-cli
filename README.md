@@ -2,9 +2,14 @@
 
 A powerful command-line interface for managing Tyk APIs and configurations. Built to streamline API lifecycle management with OpenAPI Specification (OAS) support.
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/tyktech/tyk-cli)](https://golang.org/)
-[![License](https://img.shields.io/github/license/tyktech/tyk-cli)](LICENSE)
-[![Build Status](https://img.shields.io/github/workflow/status/tyktech/tyk-cli/CI)](https://github.com/tyktech/tyk-cli/actions)
+> 📖 **[View Complete Documentation](https://sedkis.github.io/tyk-cli/)** | 🚀 **[Get Started](https://sedkis.github.io/tyk-cli/getting-started)** | 💡 **[Examples](https://sedkis.github.io/tyk-cli/examples/)**
+
+[![Go Version](https://img.shields.io/github/go-mod/go-version/sedkis/tyk-cli?style=flat-square)](https://golang.org/)
+[![License](https://img.shields.io/github/license/sedkis/tyk-cli?style=flat-square)](LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/sedkis/tyk-cli?style=flat-square)](https://github.com/sedkis/tyk-cli/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/sedkis/tyk-cli/total?style=flat-square)](https://github.com/sedkis/tyk-cli/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/sedkis/tyk-cli?style=flat-square)](https://goreportcard.com/report/github.com/sedkis/tyk-cli)
+[![Documentation](https://img.shields.io/badge/docs-available-brightgreen?style=flat-square)](https://sedkis.github.io/tyk-cli/)
 
 ## ✨ Features
 
@@ -61,6 +66,8 @@ tyk init --quick
 # Skip connection testing (for offline setup)
 tyk init --skip-test
 ```
+
+> 💡 **Need more help?** Check out our [complete documentation](https://sedkis.github.io/tyk-cli/) with detailed guides, examples, and troubleshooting tips!
 
 ## 📋 Commands
 
@@ -235,8 +242,9 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## 🆘 Support
 
-- 📖 **Documentation**: Check the [Getting Started Guide](GETTING_STARTED.md)
-- 🐛 **Issues**: [GitHub Issues](https://github.com/tyktech/tyk-cli/issues)
+- 📖 **Documentation**: [Complete Documentation](https://sedkis.github.io/tyk-cli/)
+- 🚀 **Getting Started**: [Installation & Setup Guide](https://sedkis.github.io/tyk-cli/getting-started)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/sedkis/tyk-cli/issues)
 - 💬 **Community**: [Tyk Community Forum](https://community.tyk.io/)
 
 ## 🙏 Acknowledgments

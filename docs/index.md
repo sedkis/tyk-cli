@@ -99,7 +99,7 @@ tyk api create --file my-api.yaml
 
 ## 🤝 Community & Support
 
-- **🐛 Issues**: Report bugs and request features on [GitHub Issues](https://github.com/tyktech/tyk-cli/issues)
+- **🐛 Issues**: Report bugs and request features on [GitHub Issues](https://github.com/sedkis/tyk-cli/issues)
 - **💬 Community**: Join discussions on the [Tyk Community Forum](https://community.tyk.io/)
 - **📖 Contributing**: See our [Contributing Guide]({{ site.baseurl }}/CONTRIBUTING) to get involved
 - **📧 Documentation**: Help improve these docs by clicking "Edit this page" on any page

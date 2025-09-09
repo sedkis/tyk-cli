@@ -33,7 +33,7 @@ Thank you for your interest in contributing to Tyk CLI! This guide will help you
 
 ```bash
 # Clone the repository
-git clone https://github.com/tyktech/tyk-cli.git
+git clone https://github.com/sedkis/tyk-cli.git
 cd tyk-cli
 
 # Install dependencies
