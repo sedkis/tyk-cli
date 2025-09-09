@@ -19,17 +19,15 @@ import (
 // NewInitCommand creates the 'tyk init' command for guided setup
 func NewInitCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "init",
-		Short: "Interactive setup wizard for Tyk CLI",
-		Long: `🚀 Interactive setup wizard to get you started with Tyk CLI quickly!
+    Use:   "init",
+    Short: "Interactive setup wizard for Tyk CLI",
+    Long: `🚀 Interactive setup wizard to get you started quickly!
 
 This wizard will help you:
 - Configure your Tyk Dashboard connection
-- Set up multiple environments (dev, staging, prod)
-- Test your configuration
-- Save everything for future use
-
-Run this command to get started in minutes!`,
+- Bootstrap a single environment (e.g., dev)
+- Optionally test the connection
+- Save everything for future use`,
 		RunE: runInitWizard,
 	}
 
@@ -40,39 +38,36 @@ Run this command to get started in minutes!`,
 }
 
 func runInitWizard(cmd *cobra.Command, args []string) error {
-	skipTest, _ := cmd.Flags().GetBool("skip-test")
-	quickMode, _ := cmd.Flags().GetBool("quick")
+    skipTest, _ := cmd.Flags().GetBool("skip-test")
+    // quick flag retained for compatibility; the wizard now always bootstraps a single env
+    _, _ = cmd.Flags().GetBool("quick")
 
 	scanner := bufio.NewScanner(os.Stdin)
 
 	printWelcome()
 	
-	if quickMode {
-		return runQuickSetup(scanner, skipTest)
-	}
-
-	return runFullWizard(scanner, skipTest)
+    // Always run single-environment setup
+    return runQuickSetup(scanner, skipTest)
 }
 
 func printWelcome() {
-	fmt.Println("🚀 Welcome to Tyk CLI Setup Wizard!")
-	fmt.Println("====================================")
-	fmt.Println()
-	fmt.Println("This wizard will help you configure the Tyk CLI for your environment(s).")
-	fmt.Println("You can set up multiple environments (dev, staging, production) and")
-	fmt.Println("easily switch between them.")
-	fmt.Println()
+    fmt.Println("🚀 Welcome to Tyk CLI Setup Wizard!")
+    fmt.Println("====================================")
+    fmt.Println()
+    fmt.Println("This wizard configures a single environment (e.g., dev) so you can get going fast.")
+    fmt.Println("You can add more environments later with 'tyk config add'.")
+    fmt.Println()
 }
 
 func runQuickSetup(scanner *bufio.Scanner, skipTest bool) error {
-	fmt.Println("⚡ Quick Setup Mode")
-	fmt.Println("------------------")
-	fmt.Println()
+    fmt.Println("⚡ Quick Setup Mode")
+    fmt.Println("------------------")
+    fmt.Println()
 
-	env, err := gatherEnvironmentInfo(scanner, "default", true)
-	if err != nil {
-		return err
-	}
+    env, err := gatherEnvironmentInfo(scanner, "dev", true)
+    if err != nil {
+        return err
+    }
 
 	if !skipTest {
 		if err := testConnection(env); err != nil {
@@ -315,19 +310,19 @@ func saveEnvironment(env *types.Environment, setAsGlobal bool) error {
 }
 
 func printSuccess(activeEnv string) {
-	fmt.Println("🎉 Setup Complete!")
-	fmt.Println("==================")
-	fmt.Println()
-	fmt.Printf("✅ Active environment: %s\n", activeEnv)
-	fmt.Println("✅ Configuration saved")
-	fmt.Println()
-	fmt.Println("🚀 You're ready to go! Try these commands:")
-	fmt.Println("   tyk config get                    # View your configuration")
-	fmt.Println("   tyk api --help                    # Explore API commands")
-	fmt.Println("   tyk --version                     # Check CLI version")
-	fmt.Println()
-	fmt.Println("📚 For more help: tyk --help")
-	fmt.Println()
+    fmt.Println("🎉 Setup Complete!")
+    fmt.Println("==================")
+    fmt.Println()
+    fmt.Printf("✅ Active environment: %s\n", activeEnv)
+    fmt.Println("✅ Configuration saved")
+    fmt.Println()
+    fmt.Println("🚀 You're ready to go! Try these commands:")
+    fmt.Println("   tyk config current                # View your configuration")
+    fmt.Println("   tyk api --help                    # Explore API commands")
+    fmt.Println("   tyk --version                     # Check CLI version")
+    fmt.Println()
+    fmt.Println("📚 For more help: tyk --help")
+    fmt.Println()
 }
 
 func askString(scanner *bufio.Scanner, prompt, defaultValue string) string {
