@@ -68,8 +68,8 @@ sudo mv tyk /usr/local/bin/
 # Initialize with interactive wizard
 tyk init
 
-# Deploy your first API
-tyk api create --file my-api.yaml
+# Deploy your first API  
+tyk api import-oas --file my-api.yaml
 ```
 </div>
 

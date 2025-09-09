@@ -5,6 +5,7 @@ import (
     "encoding/json"
     "fmt"
     "io"
+    "net/http"
     "os"
     "path/filepath"
     "strings"
@@ -159,9 +160,9 @@ func NewAPICommand() *cobra.Command {
 	// Add API subcommands
 	apiCmd.AddCommand(NewAPIListCommand())
 	apiCmd.AddCommand(NewAPIGetCommand())
-	apiCmd.AddCommand(NewAPICreateCommand())
-	apiCmd.AddCommand(NewAPIApplyCommand()) // New declarative upsert command
-	apiCmd.AddCommand(NewAPIUpdateCommand())
+	apiCmd.AddCommand(NewAPIImportOASCommand())
+	apiCmd.AddCommand(NewAPIApplyCommand())
+	apiCmd.AddCommand(NewAPIUpdateOASCommand())
 	apiCmd.AddCommand(NewAPIDeleteCommand())
 	// Note: Versioning commands moved to post-v0
 
@@ -240,27 +241,25 @@ suitable for use with standard OpenAPI tooling.`,
 	return cmd
 }
 
-func NewAPICreateCommand() *cobra.Command {
+func NewAPIImportOASCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Create a new API from OAS file (explicit creation only)",
-		Long: `Create a new OAS API from a local OpenAPI specification file.
+		Use:   "import-oas",
+		Short: "Import clean OpenAPI spec to create new API",
+		Long: `Import a clean OpenAPI specification to create a new API.
 
-This command ALWAYS creates a new API and generates a new API ID, 
-ignoring any existing x-tyk-api-gateway.info.id in the file.
+This command imports external API specifications and creates new APIs with
+automatically generated Tyk extensions. Always creates a new API ID.
 
-For declarative create/update based on ID presence, use 'tyk api apply'.`,
-		RunE: runAPICreate,
+Supports:
+- Local files: --file petstore.yaml
+- Remote URLs: --url https://api.example.com/openapi.json
+
+For Tyk-enhanced OAS files, use 'tyk api apply --create' instead.`,
+		RunE: runAPIImportOAS,
 	}
 
-	cmd.Flags().StringP("file", "f", "", "Path to OpenAPI specification file (required)")
-	cmd.Flags().String("version-name", "", "Version name for the API (defaults to info.version or v1)")
-	cmd.Flags().String("upstream-url", "", "Upstream URL for the API")
-	cmd.Flags().String("listen-path", "", "Listen path for the API")
-	cmd.Flags().String("custom-domain", "", "Custom domain for the API")
-	cmd.Flags().Bool("set-default", true, "Set this version as the default")
-
-	cmd.MarkFlagRequired("file")
+	cmd.Flags().StringP("file", "f", "", "Path to OpenAPI specification file")
+	cmd.Flags().String("url", "", "URL to OpenAPI specification")
 
 	return cmd
 }
@@ -268,19 +267,28 @@ For declarative create/update based on ID presence, use 'tyk api apply'.`,
 func NewAPIApplyCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apply",
-		Short: "Apply API configuration (declarative upsert)",
-		Long: `Apply API configuration from an OAS file with declarative upsert logic.
+		Short: "Apply Tyk-enhanced API configuration",
+		Long: `Apply Tyk-enhanced API configuration from an OAS file with GitOps-style declarative logic.
+
+This command is designed for infrastructure-as-code workflows and requires files with 
+x-tyk-api-gateway extensions (Tyk-enhanced OAS files).
 
 Behavior:
-- If x-tyk-api-gateway.info.id is present in the file: UPDATE existing API
-- If x-tyk-api-gateway.info.id is missing: ERROR (use --create or 'tyk api create')
-- With --create flag and no ID: CREATE new API
+- If x-tyk-api-gateway.info.id is present: UPDATE existing API
+- If x-tyk-api-gateway.info.id is missing and --create: CREATE new API  
+- If x-tyk-api-gateway.info.id is missing and no --create: ERROR
 
-This is the GitOps-friendly command for infrastructure-as-code workflows.`,
+For clean OpenAPI specs without Tyk extensions, use:
+- 'tyk api import-oas' to create new APIs
+- 'tyk api update-oas <api-id>' to update existing APIs
+
+Examples:
+  tyk api apply --file enhanced-api.yaml    # Update existing API
+  tyk api apply --file enhanced-api.yaml --create  # Create if missing`,
 		RunE: runAPIApply,
 	}
 
-	cmd.Flags().StringP("file", "f", "", "Path to OpenAPI specification file (required)")
+	cmd.Flags().StringP("file", "f", "", "Path to Tyk-enhanced OpenAPI specification file (required)")
 	cmd.Flags().Bool("create", false, "Allow creation of new APIs when ID is missing")
 	cmd.Flags().String("version-name", "", "Version name (defaults to info.version or v1)")
 	cmd.Flags().Bool("set-default", true, "Set this version as the default")
@@ -290,23 +298,27 @@ This is the GitOps-friendly command for infrastructure-as-code workflows.`,
 	return cmd
 }
 
-func NewAPIUpdateCommand() *cobra.Command {
+func NewAPIUpdateOASCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "update",
-		Short: "Update an existing API (explicit update only)",
-		Long: `Update an existing OAS API by replacing its OAS document.
+		Use:   "update-oas <api-id>",
+		Short: "Update existing API's OpenAPI spec only",
+		Long: `Update an existing API's OpenAPI specification while preserving Tyk configuration.
 
-Requires either --api-id flag or x-tyk-api-gateway.info.id in the file.
-Always updates an existing API - never creates new ones.`,
-		RunE: runAPIUpdate,
+This command updates only the OAS portion of an existing API, preserving all
+Tyk-specific middleware and configuration. It takes a clean OpenAPI spec and
+merges it with existing Tyk extensions.
+
+Supports:
+- Local files: --file new-spec.yaml
+- Remote URLs: --url https://api.example.com/openapi.json
+
+For full API updates including Tyk config, use 'tyk api apply' instead.`,
+		Args: cobra.ExactArgs(1),
+		RunE: runAPIUpdateOAS,
 	}
 
-	cmd.Flags().String("api-id", "", "API ID to update (alternative: ID in file)")
-	cmd.Flags().StringP("file", "f", "", "Path to OpenAPI specification file (required)")
-	cmd.Flags().String("version-name", "", "Target version name")
-	cmd.Flags().Bool("set-default", false, "Set this version as the default")
-
-	cmd.MarkFlagRequired("file")
+	cmd.Flags().StringP("file", "f", "", "Path to OpenAPI specification file")
+	cmd.Flags().String("url", "", "URL to OpenAPI specification")
 
 	return cmd
 }
@@ -714,12 +726,19 @@ func outputAPIAsHuman(api *types.OASAPI, requestedVersion string, oasOnly bool) 
 	return nil
 }
 
-// runAPICreate implements the 'tyk api create' command
-func runAPICreate(cmd *cobra.Command, args []string) error {
+// runAPIImportOAS implements the 'tyk api import-oas' command
+func runAPIImportOAS(cmd *cobra.Command, args []string) error {
 	// Get flags
 	filePath, _ := cmd.Flags().GetString("file")
-	versionName, _ := cmd.Flags().GetString("version-name")
-	// TODO: Handle set-default flag when sending raw OAS document
+	urlFlag, _ := cmd.Flags().GetString("url")
+
+	// Validate input: either file or url must be provided
+	if filePath == "" && urlFlag == "" {
+		return &ExitError{Code: 2, Message: "Either --file or --url must be provided"}
+	}
+	if filePath != "" && urlFlag != "" {
+		return &ExitError{Code: 2, Message: "Cannot specify both --file and --url"}
+	}
 
 	// Get configuration from context
 	config := GetConfigFromContext(cmd.Context())
@@ -727,26 +746,20 @@ func runAPICreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("configuration not found")
 	}
 
-	// Validate and read the OAS file
-	if !filepath.IsAbs(filePath) {
-		absPath, err := filepath.Abs(filePath)
-		if err != nil {
-			return &ExitError{Code: 2, Message: fmt.Sprintf("failed to resolve file path: %v", err)}
-		}
-		filePath = absPath
-	}
+	// Load OAS data from file or URL
+	var oasData map[string]interface{}
+	var err error
 
-	// Check if file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return &ExitError{Code: 2, Message: fmt.Sprintf("file not found: %s", filePath)}
+	if filePath != "" {
+		// Load from file
+		oasData, err = loadOASFromFile(filePath)
+	} else {
+		// Load from URL
+		oasData, err = loadOASFromURL(urlFlag)
 	}
-
-	// Load and parse the OAS file
-	fileInfo, err := filehandler.LoadFile(filePath)
 	if err != nil {
-		return &ExitError{Code: 2, Message: fmt.Sprintf("failed to load OAS file: %v", err)}
+		return err
 	}
-	oasData := fileInfo.Content
 
 	// Auto-generate x-tyk-api-gateway extensions for plain OAS documents
 	if !oas.HasTykExtensions(oasData) {
@@ -756,15 +769,13 @@ func runAPICreate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Strip any existing API ID from OAS file (create always generates new ID)
+	// Strip any existing API ID from OAS file (import always generates new ID)
 	oasData = stripExistingAPIID(oasData)
 
-	// Extract version name from OAS if not provided
+	// Extract version name from OAS document
+	versionName := extractVersionFromOAS(oasData)
 	if versionName == "" {
-		versionName = extractVersionFromOAS(oasData)
-		if versionName == "" {
-			versionName = "v1" // fallback
-		}
+		versionName = "v1" // fallback
 	}
 
 	// Create client
@@ -782,19 +793,19 @@ func runAPICreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		// Check for conflict errors
 		if strings.Contains(err.Error(), "409") || strings.Contains(err.Error(), "conflict") {
-			return &ExitError{Code: 4, Message: fmt.Sprintf("API creation failed due to conflict: %v", err)}
+			return &ExitError{Code: 4, Message: fmt.Sprintf("API import failed due to conflict: %v", err)}
 		}
-		return fmt.Errorf("failed to create API: %w", err)
+		return fmt.Errorf("failed to import API: %w", err)
 	}
 
 	// Get output format from context
 	outputFormat := GetOutputFormatFromContext(cmd.Context())
 
 	if outputFormat == types.OutputJSON {
-		return outputCreatedAPIAsJSON(api, versionName)
+		return outputImportedAPIAsJSON(api, versionName)
 	}
 
-	return outputCreatedAPIAsHuman(api, versionName)
+	return outputImportedAPIAsHuman(api, versionName)
 }
 
 // extractVersionFromOAS extracts version from OAS info.version field
@@ -807,14 +818,15 @@ func extractVersionFromOAS(oasData map[string]interface{}) string {
 	return ""
 }
 
-// outputCreatedAPIAsJSON outputs the created API result in JSON format
-func outputCreatedAPIAsJSON(api *types.OASAPI, versionName string) error {
+// outputImportedAPIAsJSON outputs the imported API result in JSON format
+func outputImportedAPIAsJSON(api *types.OASAPI, versionName string) error {
 	result := map[string]interface{}{
 		"api_id":          api.ID,
 		"version_name":    versionName,
 		"name":            api.Name,
 		"listen_path":     api.ListenPath,
 		"default_version": api.DefaultVersion,
+		"operation":       "imported",
 	}
 
 	encoder := json.NewEncoder(os.Stdout)
@@ -822,12 +834,12 @@ func outputCreatedAPIAsJSON(api *types.OASAPI, versionName string) error {
 	return encoder.Encode(result)
 }
 
-// outputCreatedAPIAsHuman outputs the created API result in human-readable format
-func outputCreatedAPIAsHuman(api *types.OASAPI, versionName string) error {
+// outputImportedAPIAsHuman outputs the imported API result in human-readable format
+func outputImportedAPIAsHuman(api *types.OASAPI, versionName string) error {
 	green := color.New(color.FgGreen, color.Bold)
 	blue := color.New(color.FgBlue, color.Bold)
 
-	green.Println("✓ API created successfully!")
+	green.Println("✓ API imported successfully!")
 	fmt.Printf("  API ID:         %s\n", api.ID)
 	fmt.Printf("  Name:           %s\n", api.Name)
 	fmt.Printf("  Version:        %s\n", versionName)
@@ -913,6 +925,14 @@ func runAPIApply(cmd *cobra.Command, args []string) error {
 	}
 	oasData := fileInfo.Content
 
+	// Enhanced validation: Check if it's a Tyk-enhanced OAS file
+	if !oas.HasTykExtensions(oasData) {
+		return &ExitError{
+			Code:    2,
+			Message: "File lacks required x-tyk-api-gateway extensions. This command requires Tyk-enhanced OAS files.\n\nFor clean OpenAPI specs, use:\n  tyk api import-oas --file " + filepath.Base(filePath) + "  # To create new API\n  tyk api update-oas <api-id> --file " + filepath.Base(filePath) + "  # To update existing API",
+		}
+	}
+
 	// Check for existing API ID in the file
 	apiID, hasID := oas.ExtractAPIIDFromTykExtensions(oasData)
 
@@ -922,17 +942,9 @@ func runAPIApply(cmd *cobra.Command, args []string) error {
 	} else {
 		// No API ID present
 		if !allowCreate {
-			// Check if it's a plain OAS document
-			if !oas.HasTykExtensions(oasData) {
-				return &ExitError{
-					Code:    2,
-					Message: "Plain OAS document detected (missing x-tyk-api-gateway extensions). Use 'tyk api create' for plain OAS files, or add --create flag to apply",
-				}
-			} else {
-				return &ExitError{
-					Code:    2,
-					Message: "API ID not found in x-tyk-api-gateway.info.id. Use 'tyk api create' or add --create flag to apply",
-				}
+			return &ExitError{
+				Code:    2,
+				Message: "API ID not found in x-tyk-api-gateway.info.id.\n\nTo create new API: tyk api apply --file " + filepath.Base(filePath) + " --create\nTo import clean OAS: tyk api import-oas --file " + filepath.Base(filePath),
 			}
 		}
 
@@ -1032,19 +1044,28 @@ func createNewAPIViaApply(cmd *cobra.Command, config *types.Config, oasData map[
 	outputFormat := GetOutputFormatFromContext(cmd.Context())
 
 	if outputFormat == types.OutputJSON {
-		return outputCreatedAPIAsJSON(api, versionName)
+		return outputImportedAPIAsJSON(api, versionName)
 	}
 
-	return outputCreatedAPIAsHuman(api, versionName)
+	return outputImportedAPIAsHuman(api, versionName)
 }
 
-// runAPIUpdate implements the 'tyk api update' command (explicit update)
-func runAPIUpdate(cmd *cobra.Command, args []string) error {
+// runAPIUpdateOAS implements the 'tyk api update-oas' command
+func runAPIUpdateOAS(cmd *cobra.Command, args []string) error {
+	// Get API ID from args
+	apiID := args[0]
+
 	// Get flags
-	apiIDFlag, _ := cmd.Flags().GetString("api-id")
 	filePath, _ := cmd.Flags().GetString("file")
-	versionName, _ := cmd.Flags().GetString("version-name")
-	setDefault, _ := cmd.Flags().GetBool("set-default")
+	urlFlag, _ := cmd.Flags().GetString("url")
+
+	// Validate input: either file or url must be provided
+	if filePath == "" && urlFlag == "" {
+		return &ExitError{Code: 2, Message: "Either --file or --url must be provided"}
+	}
+	if filePath != "" && urlFlag != "" {
+		return &ExitError{Code: 2, Message: "Cannot specify both --file and --url"}
+	}
 
 	// Get configuration from context
 	config := GetConfigFromContext(cmd.Context())
@@ -1052,41 +1073,22 @@ func runAPIUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("configuration not found")
 	}
 
-	// Validate and read the OAS file
-	if !filepath.IsAbs(filePath) {
-		absPath, err := filepath.Abs(filePath)
-		if err != nil {
-			return &ExitError{Code: 2, Message: fmt.Sprintf("failed to resolve file path: %v", err)}
-		}
-		filePath = absPath
-	}
+	// Load OAS data from file or URL
+	var oasData map[string]interface{}
+	var err error
 
-	// Check if file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return &ExitError{Code: 2, Message: fmt.Sprintf("file not found: %s", filePath)}
-	}
-
-	// Load and parse the OAS file
-	fileInfo, err := filehandler.LoadFile(filePath)
-	if err != nil {
-		return &ExitError{Code: 2, Message: fmt.Sprintf("failed to load OAS file: %v", err)}
-	}
-	oasData := fileInfo.Content
-
-	// Determine API ID to use
-	var apiID string
-	if apiIDFlag != "" {
-		apiID = apiIDFlag
+	if filePath != "" {
+		// Load from file
+		oasData, err = loadOASFromFile(filePath)
 	} else {
-		// Try to extract from file
-		if id, hasID := extractAPIIDFromOAS(oasData); hasID {
-			apiID = id
-		} else {
-			return &ExitError{Code: 2, Message: "Missing required API ID. Use --api-id flag or ensure x-tyk-api-gateway.info.id is set in file"}
-		}
+		// Load from URL
+		oasData, err = loadOASFromURL(urlFlag)
+	}
+	if err != nil {
+		return err
 	}
 
-	return updateExistingAPI(cmd, config, apiID, oasData, versionName, setDefault)
+	return updateExistingAPIWithOAS(cmd, config, apiID, oasData)
 }
 
 // runAPIDelete implements the 'tyk api delete' command
@@ -1211,4 +1213,137 @@ func outputDeletedAPIAsHuman(apiID, apiName string) error {
 	}
 
 	return nil
+}
+
+// loadOASFromFile loads and parses an OAS file from the local filesystem
+func loadOASFromFile(filePath string) (map[string]interface{}, error) {
+	// Validate and read the OAS file
+	if !filepath.IsAbs(filePath) {
+		absPath, err := filepath.Abs(filePath)
+		if err != nil {
+			return nil, &ExitError{Code: 2, Message: fmt.Sprintf("failed to resolve file path: %v", err)}
+		}
+		filePath = absPath
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil, &ExitError{Code: 2, Message: fmt.Sprintf("file not found: %s", filePath)}
+	}
+
+	// Load and parse the OAS file
+	fileInfo, err := filehandler.LoadFile(filePath)
+	if err != nil {
+		return nil, &ExitError{Code: 2, Message: fmt.Sprintf("failed to load OAS file: %v", err)}
+	}
+
+	return fileInfo.Content, nil
+}
+
+// loadOASFromURL loads and parses an OAS document from a URL
+func loadOASFromURL(urlStr string) (map[string]interface{}, error) {
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Fetch the URL
+	resp, err := client.Get(urlStr)
+	if err != nil {
+		return nil, &ExitError{Code: 2, Message: fmt.Sprintf("failed to fetch URL: %v", err)}
+	}
+	defer resp.Body.Close()
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, &ExitError{Code: 2, Message: fmt.Sprintf("failed to fetch URL: HTTP %d", resp.StatusCode)}
+	}
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &ExitError{Code: 2, Message: fmt.Sprintf("failed to read URL response: %v", err)}
+	}
+
+	// Parse as JSON or YAML
+	var oasData map[string]interface{}
+	
+	// Try JSON first
+	if err := json.Unmarshal(body, &oasData); err != nil {
+		// Try YAML
+		if err := yaml.Unmarshal(body, &oasData); err != nil {
+			return nil, &ExitError{Code: 2, Message: fmt.Sprintf("failed to parse OAS document: %v", err)}
+		}
+	}
+
+	return oasData, nil
+}
+
+// updateExistingAPIWithOAS handles updating an existing API with a clean OAS document
+func updateExistingAPIWithOAS(cmd *cobra.Command, config *types.Config, apiID string, oasData map[string]interface{}) error {
+	// Create client
+	c, err := client.NewClient(config)
+	if err != nil {
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Check if API exists first and get existing Tyk extensions
+	existingAPI, err := c.GetOASAPI(ctx, apiID, "")
+	if err != nil {
+		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
+			return &ExitError{Code: 3, Message: fmt.Sprintf("API with ID '%s' not found", apiID)}
+		}
+		return fmt.Errorf("failed to verify API exists: %w", err)
+	}
+
+	// Preserve existing Tyk extensions by merging with new OAS
+	if existingAPI.OAS != nil {
+		if tykExt, exists := existingAPI.OAS["x-tyk-api-gateway"]; exists {
+			oasData["x-tyk-api-gateway"] = tykExt
+		}
+	}
+
+	// If no Tyk extensions found, generate them for the clean OAS
+	if !oas.HasTykExtensions(oasData) {
+		oasData, err = oas.AddTykExtensions(oasData)
+		if err != nil {
+			return &ExitError{Code: 2, Message: fmt.Sprintf("failed to generate Tyk extensions: %v", err)}
+		}
+	}
+
+	// Ensure the API ID matches in the extensions
+	if tykExt, exists := oasData["x-tyk-api-gateway"]; exists {
+		if tykExtMap, ok := tykExt.(map[string]interface{}); ok {
+			if info, exists := tykExtMap["info"]; exists {
+				if infoMap, ok := info.(map[string]interface{}); ok {
+					infoMap["id"] = apiID
+				}
+			}
+		}
+	}
+
+	// Extract version name from OAS document
+	versionName := extractVersionFromOAS(oasData)
+	if versionName == "" {
+		versionName = "v1" // fallback
+	}
+
+	// Update the API
+	api, err := c.UpdateOASAPI(ctx, apiID, oasData)
+	if err != nil {
+		return fmt.Errorf("failed to update API: %w", err)
+	}
+
+	// Get output format from context
+	outputFormat := GetOutputFormatFromContext(cmd.Context())
+
+	if outputFormat == types.OutputJSON {
+		return outputUpdatedAPIAsJSON(api, versionName)
+	}
+
+	return outputUpdatedAPIAsHuman(api, versionName)
 }

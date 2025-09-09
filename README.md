@@ -86,15 +86,19 @@ tyk config set dashboard-url https://api.tyk.io  # Update current environment
 
 ### API Management
 ```bash
-# GitOps-style declarative management
-tyk api apply --file api.yaml      # Upsert API (create/update based on ID)
-tyk api apply --file new-api.yaml --create  # Create new API via apply
+# Clean OpenAPI Spec Management
+tyk api import-oas --file petstore.yaml           # Import external OpenAPI spec
+tyk api import-oas --url https://api.example.com/openapi.json  # Import from URL
+tyk api update-oas <api-id> --file new-spec.yaml  # Update API's OpenAPI spec only
 
-# Explicit CRUD operations
-tyk api get <api-id>                # Get API details
-tyk api get <api-id> --version-name v2  # Get specific version
-tyk api create --file api.yaml     # Always create new API
-tyk api update --api-id <id> --file updated.yaml  # Always update existing
+# Tyk-Enhanced OAS Management (GitOps)
+tyk api apply --file enhanced-api.yaml            # Update existing API with Tyk config
+tyk api apply --file enhanced-api.yaml --create   # Create new API via apply
+
+# General Operations
+tyk api get <api-id>                               # Get API details
+tyk api get <api-id> --oas-only                   # Get clean OpenAPI spec only
+tyk api get <api-id> --version-name v2            # Get specific version
 tyk api delete <api-id>             # Delete API (with confirmation)
 tyk api delete <api-id> --yes       # Delete without confirmation
 

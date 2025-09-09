@@ -144,10 +144,13 @@ tyk api list
 # Get specific API details
 tyk api get <api-id>
 
-# Create an API from OpenAPI spec
-tyk api create --file my-api.yaml
+# Import clean OpenAPI spec to create new API
+tyk api import-oas --file my-api.yaml
 
-# Update an existing API
+# Update existing API's OpenAPI spec
+tyk api update-oas <api-id> --file my-api.yaml
+
+# Apply Tyk-enhanced API configuration
 tyk api apply --file my-api.yaml
 ```
 

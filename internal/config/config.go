@@ -67,6 +67,25 @@ func (m *Manager) LoadConfig() error {
 		return err
 	}
 
+	// If no environments are configured, check for individual environment variables
+	// and create a default environment from them
+	if len(m.config.Environments) == 0 {
+		dashURL := m.viper.GetString("dash_url")
+		authToken := m.viper.GetString("auth_token")
+		orgID := m.viper.GetString("org_id")
+
+		if dashURL != "" || authToken != "" || orgID != "" {
+			// Create default environment from environment variables
+			env := &types.Environment{
+				Name:         "default",
+				DashboardURL: dashURL,
+				AuthToken:    authToken,
+				OrgID:        orgID,
+			}
+			m.SaveEnvironment(env, true)
+		}
+	}
+
 	return nil
 }
 

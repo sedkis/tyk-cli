@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+  # This is needed for the homebrew tap
+  packages: write
+
 jobs:
   goreleaser:
     runs-on: ubuntu-latest

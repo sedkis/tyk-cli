@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -279,7 +280,7 @@ func TestAPIListWithRealEndpoint(t *testing.T) {
 	os.Stdout = w
 
 	listCmd.SetArgs([]string{"--page", "1"})
-	err = listCmd.Execute()
+	err := listCmd.Execute()
 	require.NoError(t, err)
 
 	// Restore and read output

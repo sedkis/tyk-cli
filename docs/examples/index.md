@@ -17,14 +17,17 @@ Real-world examples and common workflows for using the Tyk CLI.
 ### Basic API Management
 
 ```bash
-# Create an API from OpenAPI spec
-tyk api create --file my-api.yaml
+# Import clean OpenAPI spec to create new API
+tyk api import-oas --file my-api.yaml
 
 # Get API details
 tyk api get my-api-123
 
-# Update an existing API
-tyk api apply --file updated-api.yaml
+# Update existing API's OpenAPI spec
+tyk api update-oas my-api-123 --file updated-api.yaml
+
+# Apply Tyk-enhanced API configuration
+tyk api apply --file api-with-tyk-extensions.yaml
 
 # Delete an API
 tyk api delete my-api-123 --yes

@@ -145,6 +145,7 @@ tyk api get <api-id> [flags]
 
 **Flags:**
 - `--version-name` - Get specific API version
+- `--oas-only` - Return only the OpenAPI specification without Tyk extensions
 
 **Examples:**
 ```bash
@@ -154,46 +155,56 @@ tyk api get my-api-123
 # Get specific version
 tyk api get my-api-123 --version-name v2
 
+# Get clean OpenAPI spec only
+tyk api get my-api-123 --oas-only
+
 # Get API in JSON format
 tyk api get my-api-123 --json
 ```
 
-#### `tyk api create`
+#### `tyk api import-oas`
 
-Create a new API from OAS file (explicit creation only).
+Import clean OpenAPI spec to create new API.
 
 ```bash
-tyk api create --file <path> [flags]
+tyk api import-oas [flags]
 ```
 
 **Flags:**
-- `--file` - Path to OAS specification file
+- `--file` - Path to OpenAPI specification file
+- `--url` - URL to OpenAPI specification
 
 **Examples:**
 ```bash
-# Create new API
-tyk api create --file api.yaml
+# Import from local file
+tyk api import-oas --file api.yaml
 
-# Create and output JSON
-tyk api create --file api.yaml --json
+# Import from URL
+tyk api import-oas --url https://api.example.com/openapi.json
+
+# Import and output JSON
+tyk api import-oas --file api.yaml --json
 ```
 
-#### `tyk api update`
+#### `tyk api update-oas`
 
-Update an existing API (explicit update only).
+Update existing API's OpenAPI spec only.
 
 ```bash
-tyk api update --api-id <id> --file <path> [flags]
+tyk api update-oas <api-id> [flags]
 ```
 
 **Flags:**
-- `--api-id` - ID of API to update
-- `--file` - Path to OAS specification file
+- `--file` - Path to OpenAPI specification file
+- `--url` - URL to OpenAPI specification
 
 **Examples:**
 ```bash
-# Update existing API
-tyk api update --api-id my-api-123 --file updated-api.yaml
+# Update from local file
+tyk api update-oas my-api-123 --file updated-api.yaml
+
+# Update from URL
+tyk api update-oas my-api-123 --url https://api.example.com/openapi.json
 ```
 
 #### `tyk api apply`
