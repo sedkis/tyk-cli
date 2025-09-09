@@ -1,187 +1,70 @@
 ---
-layout: default
 title: Getting Started
 nav_order: 2
-description: "Install and configure Tyk CLI to start managing your APIs"
 ---
 
-# Getting Started with Tyk CLI
-{: .no_toc }
+# Getting Started
 
-This guide will help you install and configure the Tyk CLI to start managing your APIs.
-{: .fs-6 .fw-300 }
+Welcome! You’ll be productive in ~3 minutes.
 
-## Table of contents
-{: .no_toc .text-delta }
+## 1) Install
 
-1. TOC
-{:toc}
+macOS, using brew
+  ```
+  brew tap sedkis/tyk && brew install tyk
+  ```
+Or Linux/macOS (tarball)
+  ```
+  curl -L "https://github.com/sedkis/tyk-cli/releases/latest/download/tyk-cli_$(uname -s)_$(uname -m).tar.gz" | tar xz
+  sudo mv tyk /usr/local/bin/
+  ```
 
-## Prerequisites
-
-Before you begin, you'll need:
-
-- Access to a Tyk Dashboard (local, cloud, or self-hosted)
-- Your Dashboard URL, Auth Token, and Organization ID
-- Go 1.21+ (if building from source)
-
-## Installation
-
-### Option 1: Homebrew (Recommended)
-
-```bash
-# Add the Tyk tap
-brew tap sedkis/tyk
-
-# Install the CLI
-brew install tyk
-
-# Verify installation
-tyk --version
+2) Say hi
+```
+tyk --help
 ```
 
-### Option 2: Direct Download
-
-```bash
-# Download and install the latest release
-curl -L "https://github.com/sedkis/tyk-cli/releases/latest/download/tyk-cli_$(uname -s)_$(uname -m).tar.gz" | tar xz
-sudo mv tyk /usr/local/bin/
-
-# Verify installation
-tyk --version
+## 3) Create your first environment config
 ```
-
-### Option 3: From Source
-
-```bash
-git clone https://github.com/sedkis/tyk-cli.git
-cd tyk-cli
-go build -o tyk .
-sudo mv tyk /usr/local/bin/
-```
-
-## Initial Configuration
-
-### Interactive Setup Wizard
-
-The easiest way to get started is with the interactive setup wizard:
-
-```bash
 tyk init
+## or
+tyk config add dev --dashboard-url http://localhost:3000 --auth-token dev-token --org-id dev-org
+
+## then
+tyk config use dev
 ```
 
-This will guide you through:
-1. Setting up your Dashboard URL
-2. Configuring your Auth Token
-3. Setting your Organization ID
-4. Testing the connection
-5. Creating additional environments (optional)
-
-### Quick Setup
-
-For a single environment setup:
-
+## 4) Create your first API
+Create from scratch:
 ```bash
-tyk init --quick
+tyk api create --name httpbin --upstream-url http://httpbingo.org
 ```
 
-### Offline Setup
-
-If you want to configure without testing the connection:
-
+Response:
 ```bash
-tyk init --skip-test
+✓ API created successfully!
+  API ID:         8acf2c7c0d6d4bf3707b429afeaed791
+  Name:           httpbin
+  Version:        v1
+  Listen Path:    /httpbin/
+  Upstream URL:   http://httpbingo.org
+  Default Version: v1
+
+Next steps:
+  tyk api get 8acf2c7c0d6d4bf3707b429afeaed791                           # View full configuration
+  tyk api get 8acf2c7c0d6d4bf3707b429afeaed791 --oas-only > api.yaml    # Export for editing
 ```
 
-## Finding Your Credentials
-
-### Dashboard URL
-
-- **Local Development**: `http://localhost:3000` (default)
-- **Tyk Cloud**: `https://admin.cloud.tyk.io`
-- **Self-hosted**: Your custom domain
-
-### Auth Token & Organization ID
-
-1. Log into your Tyk Dashboard
-2. Go to **Users** → Your User Profile
-3. Find **API Access Credentials**
-4. Copy the **Auth Token** and **Organization ID**
-
-## Verify Your Setup
-
-Test your configuration with:
-
-```bash
-# Check current environment
-tyk config current
-
-# Test connection (should list your APIs)
-tyk api list
+## OAS Workflows
+```
+tyk api import-oas --file path/to/my-api.yaml
 ```
 
-## Basic Usage
+5) Check it worked
+- See your API in the Tyk Dashboard
+- Hit a simple endpoint or health route
 
-### Environment Management
-
-```bash
-# List all environments
-tyk config list
-
-# Switch environments
-tyk config use production
-
-# View current environment details
-tyk config current
-```
-
-### API Operations
-
-```bash
-# List all APIs
-tyk api list
-
-# Get specific API details
-tyk api get <api-id>
-
-# Import clean OpenAPI spec to create new API
-tyk api import-oas --file my-api.yaml
-
-# Update existing API's OpenAPI spec
-tyk api update-oas <api-id> --file my-api.yaml
-
-# Apply Tyk-enhanced API configuration
-tyk api apply --file my-api.yaml
-```
-
-## What's Next?
-
-- Learn about [Configuration](configuration.md) options
-- Check out the complete [API Reference](api-reference.md)
-- Browse [Examples](examples/) for common workflows
-- Read about [Contributing](../CONTRIBUTING.md) to the project
-
-## Troubleshooting
-
-### Common Issues
-
-**"Connection refused" errors:**
-- Check your Dashboard URL is correct
-- Ensure the Tyk Dashboard is running
-- Verify network connectivity
-
-**"Unauthorized" errors:**
-- Verify your Auth Token is valid
-- Check your Organization ID is correct
-- Ensure your user has proper permissions
-
-**"Command not found" errors:**
-- Verify `tyk` is in your PATH
-- Try running `which tyk` to locate the binary
-
-### Getting Help
-
-- Run `tyk --help` for command help
-- Use `tyk <command> --help` for specific command help
-- Check [GitHub Issues](https://github.com/sedkis/tyk-cli/issues) for known problems
-- Ask questions on the [Tyk Community Forum](https://community.tyk.io/)
+Tips
+- Keep tokens out of shell history by using env vars; see {{ site.baseurl }}/configuration
+- Start with a small OAS to keep feedback tight
+- Use --dry-run if you want a no-changes preview (when available)

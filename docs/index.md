@@ -6,15 +6,22 @@ permalink: /
 
 # Tyk CLI
 
-A powerful CLI for managing Tyk APIs and configurations.
+A friendly CLI for managing Tyk APIs and configs. Built for speed, safety, and happy developers.
 
-- Getting started: {{ site.baseurl }}/getting-started
-- Configuration: {{ site.baseurl }}/configuration
-- API reference: {{ site.baseurl }}/api-reference
-- Examples: {{ site.baseurl }}/examples/
+Why you’ll like it
+- Fast: quick commands and clear errors
+- OAS-first: bring your existing specs
+- CI-friendly: easy to script and automate
 
-Quick install (macOS):
-
-```bash
+Quick install (macOS)
+```
 brew tap sedkis/tyk && brew install tyk
 ```
+
+Quick links
+- Getting Started: {{ site.baseurl }}/getting-started
+- Configuration: {{ site.baseurl }}/configuration
+ - Manage APIs: {{ site.baseurl }}/manage-apis/
+- Examples: {{ site.baseurl }}/examples/
+- FAQ: {{ site.baseurl }}/faq
+- Contributing: {{ site.baseurl }}/contributing
