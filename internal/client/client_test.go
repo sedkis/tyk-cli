@@ -206,24 +206,32 @@ func TestClient_GetOASAPI(t *testing.T) {
 }
 
 func TestClient_CreateOASAPI(t *testing.T) {
-	mockAPI := &types.OASAPI{
-		ID:         "new-api-id",
-		Name:       "New API",
-		ListenPath: "/new",
-	}
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/apis/oas" {
 			// Handle create request - return basic response with ID
 			response := types.APIResponse{Status: "success", ID: "new-api-id"}
 			json.NewEncoder(w).Encode(response)
 		} else if r.Method == http.MethodGet && r.URL.Path == "/api/apis/oas/new-api-id" {
-			// Handle get details request - return full API
-			response := types.OASAPIResponse{
-				APIResponse: types.APIResponse{Status: "success"},
-				API:         mockAPI,
+			// Return raw OAS document similar to Dashboard
+			oasDoc := map[string]interface{}{
+				"openapi": "3.0.0",
+				"info": map[string]interface{}{
+					"title":   "New API",
+					"version": "1.0.0",
+				},
+				"x-tyk-api-gateway": map[string]interface{}{
+					"info": map[string]interface{}{
+						"id":   "new-api-id",
+						"name": "New API",
+					},
+					"server": map[string]interface{}{
+						"listenPath": map[string]interface{}{
+							"value": "/new",
+						},
+					},
+				},
 			}
-			json.NewEncoder(w).Encode(response)
+			json.NewEncoder(w).Encode(oasDoc)
 		} else {
 			http.NotFound(w, r)
 		}
@@ -246,8 +254,40 @@ func TestClient_CreateOASAPI(t *testing.T) {
 	ctx := context.Background()
 	api, err := client.CreateOASAPI(ctx, oasDoc)
 	require.NoError(t, err)
-	assert.Equal(t, mockAPI.ID, api.ID)
-	assert.Equal(t, mockAPI.Name, api.Name)
+	assert.Equal(t, "new-api-id", api.ID)
+	assert.Equal(t, "New API", api.Name)
+}
+
+func TestClient_ListOASAPIs(t *testing.T) {
+	// Prepare two mock APIs
+	mockAPIs := []*types.OASAPI{
+		{ID: "api-1", Name: "API One", ListenPath: "/one", DefaultVersion: "v1"},
+		{ID: "api-2", Name: "API Two", ListenPath: "/two", DefaultVersion: "v1"},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.Equal(t, "/api/apis/oas", r.URL.Path)
+		// Ensure pagination param is passed when provided
+		assert.Equal(t, "2", r.URL.Query().Get("p"))
+		json.NewEncoder(w).Encode(types.OASAPIListResponse{
+			APIResponse: types.APIResponse{Status: "success"},
+			APIs:        mockAPIs,
+		})
+	}))
+	defer server.Close()
+
+	config := createTestConfig(server.URL, "test-token", "test-org")
+
+	client, err := NewClient(config)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	apis, err := client.ListOASAPIs(ctx, 2)
+	require.NoError(t, err)
+	require.Len(t, apis, 2)
+	assert.Equal(t, "api-1", apis[0].ID)
+	assert.Equal(t, "API One", apis[0].Name)
 }
 
 func TestClient_Health(t *testing.T) {
@@ -293,7 +333,7 @@ func TestLiveEnvironmentClient(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
-	
+
 	config := createTestConfig("http://tyk-dashboard.localhost:3000", "ff8289874f5d45de945a2ea5c02580fe", "5e9d9544a1dcd60001d0ed20")
 
 	client, err := NewClient(config)
@@ -310,13 +350,13 @@ func TestLiveEnvironmentClient(t *testing.T) {
 		}
 		t.Log("✓ Live environment health check passed")
 	})
-	
+
 	// Only run API tests if health check passed
 	if client.Health(ctx) == nil {
 		t.Run("test API endpoint", func(t *testing.T) {
 			_, err := client.GetOASAPI(ctx, "non-existent-api-id", "")
 			assert.Error(t, err)
-			
+
 			// Check that it's a proper error response
 			errorResp, ok := err.(*types.ErrorResponse)
 			if ok {

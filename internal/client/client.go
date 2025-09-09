@@ -16,17 +16,17 @@ import (
 const (
 	// API endpoints
 	OASAPIsPath        = "/api/apis/oas"
-	OASAPIPath         = "/api/apis/oas/%s"           // {apiId}
-	OASAPIVersionsPath = "/api/apis/oas/%s/versions"  // {apiId}
-	
+	OASAPIPath         = "/api/apis/oas/%s"          // {apiId}
+	OASAPIVersionsPath = "/api/apis/oas/%s/versions" // {apiId}
+
 	// Default timeout
 	DefaultTimeout = 30 * time.Second
-	
+
 	// Headers
 	HeaderAuthorization = "authorization"
 	HeaderContentType   = "content-type"
 	HeaderAccept        = "accept"
-	
+
 	// Content types
 	ContentTypeJSON = "application/json"
 	ContentTypeYAML = "application/x-yaml"
@@ -95,7 +95,13 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 
 	// Build URL
 	fullURL := *c.baseURL
-	fullURL.Path = path
+	// Support optional query string embedded in path
+	if u, err := url.Parse(path); err == nil {
+		fullURL.Path = u.Path
+		fullURL.RawQuery = u.RawQuery
+	} else {
+		fullURL.Path = path
+	}
 
 	req, err := http.NewRequestWithContext(ctx, method, fullURL.String(), reqBody)
 	if err != nil {
@@ -127,19 +133,18 @@ func (c *Client) handleResponse(resp *http.Response, result interface{}) error {
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
 
-
 	// Handle error status codes
 	if resp.StatusCode >= 400 {
 		var errorResp types.ErrorResponse
 		errorResp.Status = resp.StatusCode
 		errorResp.Message = string(body)
-		
+
 		// Try to parse as JSON error response
 		if err := json.Unmarshal(body, &errorResp); err != nil {
 			// If not JSON, use status text and body as message
 			errorResp.Message = fmt.Sprintf("%s: %s", resp.Status, string(body))
 		}
-		
+
 		return &errorResp
 	}
 
@@ -156,7 +161,7 @@ func (c *Client) handleResponse(resp *http.Response, result interface{}) error {
 // GetOASAPI retrieves an OAS API by ID
 func (c *Client) GetOASAPI(ctx context.Context, apiID string, versionName string) (*types.OASAPI, error) {
 	apiPath := fmt.Sprintf(OASAPIPath, url.PathEscape(apiID))
-	
+
 	// Add version parameter if specified
 	if versionName != "" {
 		values := url.Values{}
@@ -181,12 +186,12 @@ func (c *Client) GetOASAPI(ctx context.Context, apiID string, versionName string
 		var errorResp types.ErrorResponse
 		errorResp.Status = resp.StatusCode
 		errorResp.Message = string(body)
-		
+
 		// Try to parse as JSON error response
 		if err := json.Unmarshal(body, &errorResp); err != nil {
 			errorResp.Message = fmt.Sprintf("%s: %s", resp.Status, string(body))
 		}
-		
+
 		return nil, &errorResp
 	}
 
@@ -255,6 +260,105 @@ func (c *Client) DeleteOASAPI(ctx context.Context, apiID string) error {
 	}
 
 	return c.handleResponse(resp, nil)
+}
+
+// ListOASAPIs retrieves a paginated list of OAS APIs. Page numbers are 1-based.
+func (c *Client) ListOASAPIs(ctx context.Context, page int) ([]*types.OASAPI, error) {
+	// Try using the regular APIs endpoint instead of OAS-specific endpoint
+	listPath := "/api/apis"
+
+	// Add pagination if provided
+	if page > 0 {
+		values := url.Values{}
+		values.Set("p", fmt.Sprintf("%d", page))
+		listPath += "?" + values.Encode()
+	}
+
+	resp, err := c.doRequest(ctx, http.MethodGet, listPath, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Read the response body directly like GetOASAPI does
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Handle error status codes
+	if resp.StatusCode >= 400 {
+		var errorResp types.ErrorResponse
+		errorResp.Status = resp.StatusCode
+		errorResp.Message = string(body)
+
+		// Try to parse as JSON error response
+		if err := json.Unmarshal(body, &errorResp); err != nil {
+			errorResp.Message = fmt.Sprintf("%s: %s", resp.Status, string(body))
+		}
+
+		return nil, &errorResp
+	}
+
+	// Parse the actual Tyk Dashboard API response format
+	var dashboardResponse map[string]interface{}
+	if err := json.Unmarshal(body, &dashboardResponse); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal dashboard API response: %w", err)
+	}
+
+	// Extract the APIs array
+	apisArray, ok := dashboardResponse["apis"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response format: 'apis' field not found or not an array")
+	}
+
+	// Convert to our expected format
+	var apis []*types.OASAPI
+	for _, apiItemInterface := range apisArray {
+		apiItem, ok := apiItemInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Extract api_definition
+		apiDefInterface, ok := apiItem["api_definition"]
+		if !ok {
+			continue
+		}
+		apiDef, ok := apiDefInterface.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Extract basic info
+		apiID, _ := apiDef["api_id"].(string)
+		name, _ := apiDef["name"].(string)
+		
+		// Extract listen path from proxy
+		var listenPath string
+		if proxyInterface, ok := apiDef["proxy"]; ok {
+			if proxy, ok := proxyInterface.(map[string]interface{}); ok {
+				if path, ok := proxy["listen_path"].(string); ok {
+					listenPath = path
+				}
+			}
+		}
+
+		// Include all APIs (since the command is meant to list APIs that can be managed as OAS)
+		// The filtering was too restrictive and excluding most APIs
+		if apiID != "" {
+			api := &types.OASAPI{
+				ID:             apiID,
+				Name:           name,
+				ListenPath:     listenPath,
+				DefaultVersion: "v1", // Default since this info isn't easily available
+				OAS:            nil,  // We could parse this from apiItem["oas"] if needed
+			}
+			apis = append(apis, api)
+		}
+	}
+
+	return apis, nil
 }
 
 // ListOASAPIVersions lists all versions for an OAS API
@@ -345,15 +449,15 @@ func (c *Client) parseOASDocumentToAPI(oasDoc map[string]interface{}) (*types.OA
 
 	// Build the API object
 	api := &types.OASAPI{
-		ID:             getString(apiInfo, "id"),
-		Name:           getString(apiInfo, "name"),
-		ListenPath:     listenPath,
-		UpstreamURL:    upstreamURL,
-		OAS:            oasDoc,
+		ID:          getString(apiInfo, "id"),
+		Name:        getString(apiInfo, "name"),
+		ListenPath:  listenPath,
+		UpstreamURL: upstreamURL,
+		OAS:         oasDoc,
 		// For now, we'll set these to empty since they might not be in this format
 		DefaultVersion: "v1",
 		VersionData:    make(map[string]*types.APIVersion),
-		CreatedAt:      "", 
+		CreatedAt:      "",
 		UpdatedAt:      "",
 	}
 
