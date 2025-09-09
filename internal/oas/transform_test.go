@@ -215,7 +215,7 @@ func TestGenerateListenPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			result := generateListenPath(tt.title)
+			result := GenerateListenPath(tt.title)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

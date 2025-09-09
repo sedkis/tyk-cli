@@ -32,6 +32,19 @@ brew tap sedkis/tyk
 
 # Install the CLI
 brew install tyk
+
+## Check version
+$ tyk -v
+tyk version 0.2.1
+
+## UPGRADING the cli
+$ brew update
+
+$ brew upgrade tyk
+
+## Check version
+$ tyk -v
+tyk version 0.2.1
 ```
 
 #### Direct Download
@@ -86,6 +99,13 @@ tyk config set dashboard-url https://api.tyk.io  # Update current environment
 
 ### API Management
 ```bash
+# Quick API Creation
+tyk api create --name "User Service" --upstream-url https://users.api.com
+tyk api create --name "Payment API" --upstream-url https://payments.internal \
+  --listen-path /payments/v2 --custom-domain api.company.com
+tyk api create --name "Analytics API" --upstream-url https://analytics.service \
+  --description "Customer analytics and reporting" --version-name v2
+
 # Clean OpenAPI Spec Management
 tyk api import-oas --file petstore.yaml           # Import external OpenAPI spec
 tyk api import-oas --url https://api.example.com/openapi.json  # Import from URL
@@ -96,6 +116,8 @@ tyk api apply --file enhanced-api.yaml            # Update existing API with Tyk
 tyk api apply --file enhanced-api.yaml --create   # Create new API via apply
 
 # General Operations
+tyk api list                        # List all APIs
+tyk api list -i                     # Interactive
 tyk api get <api-id>                               # Get API details
 tyk api get <api-id> --oas-only                   # Get clean OpenAPI spec only
 tyk api get <api-id> --version-name v2            # Get specific version

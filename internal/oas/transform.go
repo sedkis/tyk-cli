@@ -63,7 +63,7 @@ func AddTykExtensions(oasDoc map[string]interface{}) (map[string]interface{}, er
 	}
 	
 	// Generate listen path from title
-	listenPath := generateListenPath(title)
+	listenPath := GenerateListenPath(title)
 	
 	// Create a copy of the document
 	result := make(map[string]interface{})
@@ -113,9 +113,9 @@ func extractUpstreamURL(oasDoc map[string]interface{}) string {
 	return url
 }
 
-// generateListenPath creates a listen path from API title
+// GenerateListenPath creates a listen path from API title
 // Examples: "My API" -> "/my-api/", "Swagger Petstore" -> "/swagger-petstore/"
-func generateListenPath(title string) string {
+func GenerateListenPath(title string) string {
 	// Convert to lowercase and replace spaces/special chars with hyphens
 	slug := strings.ToLower(title)
 	

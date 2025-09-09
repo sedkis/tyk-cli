@@ -160,6 +160,7 @@ func NewAPICommand() *cobra.Command {
 	// Add API subcommands
 	apiCmd.AddCommand(NewAPIListCommand())
 	apiCmd.AddCommand(NewAPIGetCommand())
+	apiCmd.AddCommand(NewAPICreateCommand())
 	apiCmd.AddCommand(NewAPIImportOASCommand())
 	apiCmd.AddCommand(NewAPIApplyCommand())
 	apiCmd.AddCommand(NewAPIUpdateOASCommand())
@@ -221,6 +222,42 @@ func NewAPIVersionsSwitchDefaultCommand() *cobra.Command {
 }
 
 // Placeholder functions for API commands - these will be implemented in the next phases
+
+func NewAPICreateCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a new API from scratch",
+		Long: `Create a new OAS API from scratch with minimal configuration.
+
+This command creates a new API by specifying basic parameters like name and upstream URL.
+It auto-generates a minimal OpenAPI specification and Tyk extensions with sensible defaults.
+
+Examples:
+  tyk api create --name "User Service" --upstream-url https://users.api.com
+  tyk api create --name "Payment API" --upstream-url https://payments.internal \
+    --listen-path /payments/v2 --custom-domain api.company.com
+  tyk api create --name "Analytics API" --upstream-url https://analytics.service \
+    --description "Customer analytics and reporting" --version-name v2
+
+After creation, you can:
+  tyk api get <api-id>                           # View full configuration
+  tyk api get <api-id> --oas-only > api.yaml    # Export for editing
+  tyk api update-oas <api-id> --file api.yaml   # Update with enhanced spec`,
+		RunE: runAPICreate,
+	}
+
+	cmd.Flags().StringP("name", "n", "", "API name (required)")
+	cmd.Flags().String("upstream-url", "", "Upstream service URL (required)")
+	cmd.Flags().String("listen-path", "", "API listen path (auto-generated from name if not provided)")
+	cmd.Flags().String("version-name", "v1", "Version name for the API")
+	cmd.Flags().String("custom-domain", "", "Custom domain for the API")
+	cmd.Flags().String("description", "", "API description")
+
+	cmd.MarkFlagRequired("name")
+	cmd.MarkFlagRequired("upstream-url")
+
+	return cmd
+}
 
 func NewAPIGetCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -1277,6 +1314,170 @@ func loadOASFromURL(urlStr string) (map[string]interface{}, error) {
 	}
 
 	return oasData, nil
+}
+
+// runAPICreate implements the 'tyk api create' command
+func runAPICreate(cmd *cobra.Command, args []string) error {
+	// Get flags
+	name, _ := cmd.Flags().GetString("name")
+	upstreamURL, _ := cmd.Flags().GetString("upstream-url")
+	listenPath, _ := cmd.Flags().GetString("listen-path")
+	versionName, _ := cmd.Flags().GetString("version-name")
+	customDomain, _ := cmd.Flags().GetString("custom-domain")
+	description, _ := cmd.Flags().GetString("description")
+
+	// Auto-generate listen path if not provided
+	if listenPath == "" {
+		listenPath = oas.GenerateListenPath(name)
+	}
+
+	// Set default description if not provided
+	if description == "" {
+		description = "Auto-generated API specification"
+	}
+
+	// Get configuration from context
+	config := GetConfigFromContext(cmd.Context())
+	if config == nil {
+		return fmt.Errorf("configuration not found")
+	}
+
+	// Generate the OAS document with Tyk extensions
+	oasData, err := generateOASForCreate(name, description, versionName, upstreamURL, listenPath, customDomain)
+	if err != nil {
+		return fmt.Errorf("failed to generate OAS document: %w", err)
+	}
+
+	// Create client
+	c, err := client.NewClient(config)
+	if err != nil {
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Create the API
+	api, err := c.CreateOASAPI(ctx, oasData)
+	if err != nil {
+		// Check for conflict errors
+		if strings.Contains(err.Error(), "409") || strings.Contains(err.Error(), "conflict") {
+			return &ExitError{Code: 4, Message: fmt.Sprintf("API creation failed due to conflict: %v", err)}
+		}
+		return fmt.Errorf("failed to create API: %w", err)
+	}
+
+	// Get output format from context
+	outputFormat := GetOutputFormatFromContext(cmd.Context())
+
+	if outputFormat == types.OutputJSON {
+		return outputCreatedAPIAsJSON(api, versionName)
+	}
+
+	return outputCreatedAPIAsHuman(api, versionName)
+}
+
+// generateOASForCreate creates a minimal OAS document with Tyk extensions for the create command
+func generateOASForCreate(name, description, version, upstreamURL, listenPath, customDomain string) (map[string]interface{}, error) {
+	// Create basic OAS structure
+	oasDoc := map[string]interface{}{
+		"openapi": "3.0.0",
+		"info": map[string]interface{}{
+			"title":       name,
+			"description": description,
+			"version":     version,
+		},
+		"servers": []interface{}{
+			map[string]interface{}{
+				"url": upstreamURL,
+			},
+		},
+		"paths": map[string]interface{}{},
+	}
+
+	// Add Tyk extensions
+	tykExtensions := map[string]interface{}{
+		"info": map[string]interface{}{
+			"name": name,
+			"state": map[string]interface{}{
+				"active": true,
+			},
+		},
+		"upstream": map[string]interface{}{
+			"url": upstreamURL,
+		},
+		"server": map[string]interface{}{
+			"listenPath": map[string]interface{}{
+				"value": listenPath,
+				"strip": true,
+			},
+		},
+	}
+
+	// Add custom domain if provided
+	if customDomain != "" {
+		tykExtensions["server"].(map[string]interface{})["customDomain"] = map[string]interface{}{
+			"enabled": true,
+			"name":    customDomain,
+		}
+	}
+
+	oasDoc["x-tyk-api-gateway"] = tykExtensions
+
+	return oasDoc, nil
+}
+
+// outputCreatedAPIAsJSON outputs the created API result in JSON format
+func outputCreatedAPIAsJSON(api *types.OASAPI, versionName string) error {
+	result := map[string]interface{}{
+		"api_id":          api.ID,
+		"version_name":    versionName,
+		"name":            api.Name,
+		"listen_path":     api.ListenPath,
+		"default_version": api.DefaultVersion,
+		"operation":       "created",
+	}
+
+	if api.CustomDomain != "" {
+		result["custom_domain"] = api.CustomDomain
+	}
+	if api.UpstreamURL != "" {
+		result["upstream_url"] = api.UpstreamURL
+	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(result)
+}
+
+// outputCreatedAPIAsHuman outputs the created API result in human-readable format
+func outputCreatedAPIAsHuman(api *types.OASAPI, versionName string) error {
+	green := color.New(color.FgGreen, color.Bold)
+	blue := color.New(color.FgBlue, color.Bold)
+	dim := color.New(color.FgHiBlack)
+
+	green.Println("✓ API created successfully!")
+	fmt.Printf("  API ID:         %s\n", api.ID)
+	fmt.Printf("  Name:           %s\n", api.Name)
+	fmt.Printf("  Version:        %s\n", versionName)
+	fmt.Printf("  Listen Path:    %s\n", api.ListenPath)
+
+	if api.CustomDomain != "" {
+		fmt.Printf("  Custom Domain:  %s\n", api.CustomDomain)
+	}
+	if api.UpstreamURL != "" {
+		fmt.Printf("  Upstream URL:   %s\n", api.UpstreamURL)
+	}
+
+	blue.Printf("  Default Version: %s\n", api.DefaultVersion)
+
+	fmt.Printf("\n")
+	dim.Println("Next steps:")
+	dim.Printf("  tyk api get %s                           # View full configuration\n", api.ID)
+	dim.Printf("  tyk api get %s --oas-only > api.yaml    # Export for editing\n", api.ID)
+
+	return nil
 }
 
 // updateExistingAPIWithOAS handles updating an existing API with a clean OAS document

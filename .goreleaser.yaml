@@ -4,9 +4,7 @@ project_name: tyk-cli
 before:
   hooks:
     - go mod tidy
-    # TODO: Re-enable tests after fixing test suite issues
-    # Tests disabled temporarily to get working Homebrew release
-    # - go test ./... -short
+    - go test ./... -short
 
 builds:
   - id: tyk
@@ -21,13 +19,11 @@ builds:
     goarch:
       - amd64
       - arm64
-    # Build flags to embed version info
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
       - -X main.commit={{.Commit}}
       - -X main.buildTime={{.Date}}
-    # Skip building for specific combinations if needed
     ignore:
       - goos: windows
         goarch: arm64
@@ -41,7 +37,6 @@ archives:
     files:
       - README.md
       - LICENSE
-      # Add any other files you want in the release
 
 checksum:
   name_template: 'checksums.txt'
@@ -70,15 +65,12 @@ changelog:
     - title: 'Others'
       order: 999
 
-# Homebrew tap configuration - Temporarily disabled due to token permissions
-# TODO: Set up proper GitHub token with repo permissions to enable Homebrew tap
 brews:
   - name: tyk
     repository:
       owner: sedkis
       name: homebrew-tyk
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-      # This will create/update the homebrew-tyk repository
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
@@ -86,13 +78,10 @@ brews:
     homepage: "https://github.com/sedkis/tyk-cli"
     description: "Command-line interface for managing Tyk APIs and configurations"
     license: "MIT"
-    # Dependencies
     dependencies:
       - name: curl
-    # Test command
     test: |
       system "#{bin}/tyk --version"
-    # Install instructions
     install: |
       bin.install "tyk"
 
