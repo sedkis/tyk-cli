@@ -72,12 +72,6 @@ sudo mv tyk /usr/local/bin/
 ```bash
 # Run the interactive setup wizard
 tyk init
-
-# Quick setup for single environment
-tyk init --quick
-
-# Skip connection testing (for offline setup)
-tyk init --skip-test
 ```
 
 > 💡 **Need more help?** Check out our [complete documentation](https://sedkis.github.io/tyk-cli/) with detailed guides, examples, and troubleshooting tips!
@@ -88,10 +82,10 @@ tyk init --skip-test
 ```bash
 # Interactive setup wizard
 tyk init                    # Full setup wizard with multiple environments
-tyk init --quick           # Quick single-environment setup  
 
 # Environment management
 tyk config list            # List all environments
+tyk config use             # Switch environnment interactively
 tyk config use staging     # Switch to staging environment
 tyk config current         # Show current environment
 tyk config set dashboard-url https://api.tyk.io  # Update current environment
@@ -101,12 +95,8 @@ tyk config set dashboard-url https://api.tyk.io  # Update current environment
 ```bash
 # Quick API Creation
 tyk api create --name "User Service" --upstream-url https://users.api.com
-tyk api create --name "Payment API" --upstream-url https://payments.internal \
-  --listen-path /payments/v2 --custom-domain api.company.com
-tyk api create --name "Analytics API" --upstream-url https://analytics.service \
-  --description "Customer analytics and reporting" --version-name v2
 
-# Clean OpenAPI Spec Management
+# Create from OpenAPI Spec Management
 tyk api import-oas --file petstore.yaml           # Import external OpenAPI spec
 tyk api import-oas --url https://api.example.com/openapi.json  # Import from URL
 tyk api update-oas <api-id> --file new-spec.yaml  # Update API's OpenAPI spec only
@@ -119,8 +109,7 @@ tyk api apply --file enhanced-api.yaml --create   # Create new API via apply
 tyk api list                        # List all APIs
 tyk api list -i                     # Interactive
 tyk api get <api-id>                               # Get API details
-tyk api get <api-id> --oas-only                   # Get clean OpenAPI spec only
-tyk api get <api-id> --version-name v2            # Get specific version
+tyk api get <api-id> --oas-only                   # Get OpenAPI spec only
 tyk api delete <api-id>             # Delete API (with confirmation)
 tyk api delete <api-id> --yes       # Delete without confirmation
 
