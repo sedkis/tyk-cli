@@ -20,6 +20,9 @@ A powerful command-line interface for managing Tyk APIs and configurations. Buil
 - 🎨 **Beautiful CLI** - Colorful, intuitive command-line experience
 - ✅ **Comprehensive Testing** - >80% test coverage with live environment validation
 
+## Licensed Tyk only
+- This CLI is designed to work with the licensed version of Tyk - via Control Plane.
+
 ## 🚀 Quick Start
 
 ### Installation
