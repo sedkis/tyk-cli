@@ -995,7 +995,23 @@ func updateExistingAPI(cmd *cobra.Command, config *types.Config, apiID string, o
     // Check if API exists first. If not found, create it with the same ID (idempotent upsert)
     _, err = c.GetOASAPI(ctx, apiID, "")
     if err != nil {
-        if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
+        // Determine if the error means "not found" for upsert semantics
+        notFound := false
+        if er, ok := err.(*types.ErrorResponse); ok {
+            // Treat 404 as not found; also handle some Dashboard variants that return 400 for missing IDs
+            if er.Status == 404 {
+                notFound = true
+            } else if er.Status == 400 {
+                msg := strings.ToLower(er.Message)
+                if strings.Contains(msg, "could not retrieve api") || strings.Contains(msg, "not found") {
+                    notFound = true
+                }
+            }
+        } else if strings.Contains(err.Error(), "404") || strings.Contains(strings.ToLower(err.Error()), "not found") {
+            notFound = true
+        }
+
+        if notFound {
             // Fallback to create with provided ID in the OAS
             if versionName == "" {
                 versionName = extractVersionFromOAS(oasData)
@@ -1019,6 +1035,7 @@ func updateExistingAPI(cmd *cobra.Command, config *types.Config, apiID string, o
             }
             return outputImportedAPIAsHuman(api, versionName)
         }
+
         return fmt.Errorf("failed to verify API exists: %w", err)
     }
 
