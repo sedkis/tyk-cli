@@ -28,9 +28,7 @@ jobs:
           TYK_AUTH_TOKEN: ${{ secrets[matrix.env == 'staging' && 'STAGING_AUTH_TOKEN' || 'PROD_AUTH_TOKEN'] }}
           TYK_ORG_ID: ${{ secrets[matrix.env == 'staging' && 'STAGING_ORG_ID' || 'PROD_ORG_ID'] }}
         run: |
-          # First deployment (no existing API): add --create
-          # tyk api apply --file apis/users.yaml --create
-          # Subsequent updates:
+          # Idempotent apply: updates if API exists; creates if missing
           tyk api apply --file apis/users.yaml
 ```
 

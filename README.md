@@ -105,8 +105,9 @@ tyk api import-oas --url https://api.example.com/openapi.json  # Import from URL
 tyk api update-oas <api-id> --file new-spec.yaml  # Update API's OpenAPI spec only
 
 # Tyk-Enhanced OAS Management (GitOps)
-tyk api apply --file enhanced-api.yaml            # Update existing API with Tyk config
-tyk api apply --file enhanced-api.yaml --create   # Create new API via apply
+# If the file contains x-tyk-api-gateway.info.id, apply will upsert:
+# update if it exists, or create with the same ID if missing
+tyk api apply --file enhanced-api.yaml            # Idempotent upsert (update or create)
 
 # General Operations
 tyk api list                        # List all APIs

@@ -278,9 +278,9 @@ func TestNewAPIApplyCommand_Enhanced(t *testing.T) {
 	assert.Contains(t, cmd.Long, "x-tyk-api-gateway extensions")
 	assert.Contains(t, cmd.Long, "infrastructure-as-code")
 	
-	// Check enhanced help text
-	assert.Contains(t, cmd.Long, "tyk api import-oas")
-	assert.Contains(t, cmd.Long, "tyk api update-oas")
+    // Check enhanced help text
+    assert.Contains(t, cmd.Long, "tyk api import-oas")
+    assert.Contains(t, cmd.Long, "tyk api update-oas")
 }
 
 func TestRunAPIApply_PlainOASRejection(t *testing.T) {
@@ -311,39 +311,47 @@ func TestRunAPIApply_PlainOASRejection(t *testing.T) {
 	assert.Contains(t, err.Error(), "tyk api update-oas")
 }
 
-func TestRunAPIApply_MissingIDEnhancedError(t *testing.T) {
-	// Create Tyk-enhanced OAS but without API ID
-	enhancedOAS := mockTykEnhancedOAS()
-	// Remove the ID from the extensions
-	if tykExt, ok := enhancedOAS["x-tyk-api-gateway"].(map[string]interface{}); ok {
-		if info, ok := tykExt["info"].(map[string]interface{}); ok {
-			delete(info, "id")
-		}
-	}
-	
-	tmpFile := createTempOASFile(t, enhancedOAS)
+func TestRunAPIApply_MissingIDCreatesAPI(t *testing.T) {
+    // Create Tyk-enhanced OAS but without API ID
+    enhancedOAS := mockTykEnhancedOAS()
+    if tykExt, ok := enhancedOAS["x-tyk-api-gateway"].(map[string]interface{}); ok {
+        if info, ok := tykExt["info"].(map[string]interface{}); ok {
+            delete(info, "id")
+        }
+    }
 
-	// Create command
-	cmd := NewAPIApplyCommand()
-	config := &types.Config{
-		DefaultEnvironment: "test",
-		Environments: map[string]*types.Environment{
-			"test": {Name: "test", DashboardURL: "http://test", AuthToken: "token", OrgID: "org"},
-		},
-	}
-	cmd.SetContext(withConfig(context.Background(), config))
+    tmpFile := createTempOASFile(t, enhancedOAS)
 
-	// Set file flag but no --create
-	cmd.Flags().Set("file", tmpFile)
+    // Mock server for creation + fetch
+    server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/api/apis/oas") {
+            createResp := mockCreateAPIResponse()
+            json.NewEncoder(w).Encode(createResp)
+            return
+        }
+        if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/api/apis/oas/new-api-456") {
+            api := mockCreatedOASAPI()
+            json.NewEncoder(w).Encode(api.OAS)
+            return
+        }
+        http.NotFound(w, r)
+    }))
+    defer server.Close()
 
-	// Execute command
-	err := cmd.Execute()
+    cmd := NewAPIApplyCommand()
+    config := &types.Config{
+        DefaultEnvironment: "test",
+        Environments: map[string]*types.Environment{
+            "test": {Name: "test", DashboardURL: server.URL, AuthToken: "token", OrgID: "org"},
+        },
+    }
+    cmd.SetContext(withConfig(context.Background(), config))
 
-	// Should get enhanced error message about missing API ID
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "API ID not found in x-tyk-api-gateway.info.id")
-	assert.Contains(t, err.Error(), "tyk api apply --file")
-	assert.Contains(t, err.Error(), "--create")
+    cmd.Flags().Set("file", tmpFile)
+
+    // Execute command: should succeed and create new API
+    err := cmd.Execute()
+    assert.NoError(t, err)
 }
 
 func TestLoadOASFromFile_Success(t *testing.T) {
