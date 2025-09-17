@@ -1,0 +1,130 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "Echo OAS Example"
+  },
+  "servers": [
+    {
+      "url": "https://api.zynga.com/echo"
+    },
+    {
+      "url": "http://localhost:8080/echo-oas"
+    }
+  ],
+  "paths": {
+    "/echo": {
+      "get": {
+        "operationId": "echo",
+        "description": "Serialize the headers from the request into the response body.",
+        "responses": {
+          "200": {
+            "description": "successful echo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "required": [
+                    "headers"
+                  ],
+                  "properties": {
+                    "headers": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mock": {
+      "get": {
+        "operationId": "echoMock",
+        "description": "A fixed response returned by the api gateway, not the underlying service.",
+        "responses": {
+          "200": {
+            "description": "success"
+          }
+        }
+      }
+    }
+  },
+  "x-tyk-api-gateway": {
+    "api_definition": "echo-oas",
+    "info": {
+      "name": "Echo OAS API",
+      "id": "echo",
+      "orgId": "default",
+      "state": {
+        "active": true,
+        "internal": false
+      }
+    },
+    "upstream": {
+      "url": "http://echo.eks.sharedservices.zynga.com/echo"
+    },
+    "server": {
+      "listenPath": {
+        "value": "/echo-oas",
+        "strip": true
+      },
+      "detailedTracing": {
+        "enabled": true
+      },
+      "authentication": {
+        "enabled": true,
+        "stripAuthorizationData": true,
+        "baseIdentityProvider": "custom_auth",
+        "custom": {
+          "enabled": true,
+          "config": {
+            "enabled": true,
+            "functionName": "ZsrCustomAuth",
+            "path": "/plugins/zsr.so"
+          }
+        }
+      }
+    },
+    "middleware": {
+      "global": {
+        "pluginConfig": {
+          "driver": "goplugin"
+        },
+        "postPlugins": [
+          {
+            "enabled": true,
+            "functionName": "AddZsrHeaders",
+            "path": "/plugins/zsr.so"
+          }
+        ]
+      },
+      "operations": {
+        "echo": {
+          "trackEndpoint": {
+            "enabled": true
+          }
+        },
+        "echoMock": {
+          "ignoreAuthentication": {
+            "enabled": true
+          },
+          "mockResponse": {
+            "enabled": true,
+            "code": 200,
+            "body": "This is a OAS echo response, direct from the api gateway",
+            "headers": [
+              {
+                "name": "x-example-header",
+                "value": "baz2"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
