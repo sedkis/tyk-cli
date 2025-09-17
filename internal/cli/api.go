@@ -324,7 +324,7 @@ Examples:
 		RunE: runAPIApply,
 	}
 
-    cmd.Flags().StringP("file", "f", "", "Path to Tyk-enhanced OpenAPI specification file (required)")
+	cmd.Flags().StringP("file", "f", "", "Path to Tyk-enhanced OpenAPI specification file (use '-' for stdin) (required)")
     cmd.Flags().String("version-name", "", "Version name (defaults to info.version or v1)")
     cmd.Flags().Bool("set-default", true, "Set this version as the default")
 
@@ -939,26 +939,41 @@ func runAPIApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("configuration not found")
 	}
 
-	// Validate and read the OAS file
-	if !filepath.IsAbs(filePath) {
-		absPath, err := filepath.Abs(filePath)
-		if err != nil {
-			return &ExitError{Code: 2, Message: fmt.Sprintf("failed to resolve file path: %v", err)}
-		}
-		filePath = absPath
-	}
+    var oasData map[string]interface{}
+    if filePath == "-" {
+        // Read from stdin; support JSON or YAML (YAML parser also accepts JSON)
+        data, err := io.ReadAll(os.Stdin)
+        if err != nil {
+            return &ExitError{Code: 2, Message: fmt.Sprintf("failed to read stdin: %v", err)}
+        }
+        if len(data) == 0 {
+            return &ExitError{Code: 2, Message: "no input provided on stdin"}
+        }
+        if err := yaml.Unmarshal(data, &oasData); err != nil {
+            return &ExitError{Code: 2, Message: fmt.Sprintf("failed to parse input as YAML/JSON: %v", err)}
+        }
+    } else {
+        // Validate and read the OAS file
+        if !filepath.IsAbs(filePath) {
+            absPath, err := filepath.Abs(filePath)
+            if err != nil {
+                return &ExitError{Code: 2, Message: fmt.Sprintf("failed to resolve file path: %v", err)}
+            }
+            filePath = absPath
+        }
 
-	// Check if file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return &ExitError{Code: 2, Message: fmt.Sprintf("file not found: %s", filePath)}
-	}
+        // Check if file exists
+        if _, err := os.Stat(filePath); os.IsNotExist(err) {
+            return &ExitError{Code: 2, Message: fmt.Sprintf("file not found: %s", filePath)}
+        }
 
-	// Load and parse the OAS file
-	fileInfo, err := filehandler.LoadFile(filePath)
-	if err != nil {
-		return &ExitError{Code: 2, Message: fmt.Sprintf("failed to load OAS file: %v", err)}
-	}
-	oasData := fileInfo.Content
+        // Load and parse the OAS file
+        fileInfo, err := filehandler.LoadFile(filePath)
+        if err != nil {
+            return &ExitError{Code: 2, Message: fmt.Sprintf("failed to load OAS file: %v", err)}
+        }
+        oasData = fileInfo.Content
+    }
 
 	// Enhanced validation: Check if it's a Tyk-enhanced OAS file
     if !oas.HasTykExtensions(oasData) {
